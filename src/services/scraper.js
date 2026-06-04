@@ -6,6 +6,8 @@ const { launchBrowser } = require('./browser');
 const config = require('../config/config');
 const logger = require('../utils/logger');
 
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
 // ─── Selectors ─────────────────────────────────────────────────────────────────
 // Verified directly from DOM of https://pep.ppatk.go.id/admin/user/login
 // NOTE: Update these if the PPATK page structure ever changes.
@@ -105,11 +107,9 @@ const performLogin = async (page) => {
   logger.info(`[Login] Navigating to: ${targetUrl}`);
   await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: timeoutMs });
 
-  // Fill credentials
-  logger.info(`[Login] Mengisi username: ${loginEmail}`);
+  // Fill credentials (quiet login process)
   await page.fill(SELECTORS.usernameInput, loginEmail);
   await page.fill(SELECTORS.passwordInput, loginPassword);
-  logger.info('[Login] Credentials terisi.');
 
   // Solve reCAPTCHA jika strategy menggunakan solver berbayar
   if (['capsolver', '2captcha'].includes(strategy)) {
@@ -121,8 +121,6 @@ const performLogin = async (page) => {
     logger.info(`[Login] reCAPTCHA solved (count: ${solved?.length ?? 0}).`);
   } else if (strategy === 'stealth') {
     // Stealth mode: gerakkan kursor secara natural lalu klik reCAPTCHA checkbox
-    logger.info('[Login] Stealth mode — mencari reCAPTCHA checkbox...');
-
     try {
       // Tunggu iframe reCAPTCHA muncul (maks 8 detik)
       const recaptchaFrame = await page.frameLocator('iframe[title*="reCAPTCHA"]').first();
@@ -174,11 +172,9 @@ const performLogin = async (page) => {
       await sleep(200 + Math.random() * 300);
 
       // Klik checkbox
-      logger.info(`[Login] Stealth — klik reCAPTCHA checkbox di (${targetX.toFixed(0)}, ${targetY.toFixed(0)})`);
       await page.mouse.click(targetX, targetY);
 
       // Tunggu reCAPTCHA selesai diproses (aria-checked="true" artinya solved)
-      logger.info('[Login] Stealth — menunggu reCAPTCHA selesai diproses...');
       try {
         // Cek apakah checkbox berubah jadi checked dalam 15 detik
         await recaptchaFrame
@@ -207,7 +203,6 @@ const performLogin = async (page) => {
 
   // Submit form dan tunggu navigasi
   // Gunakan JS dispatchEvent sebagai fallback jika ada overlay menghalangi klik biasa
-  logger.info('[Login] Klik tombol Login...');
   await Promise.all([
     page.waitForNavigation({ timeout: timeoutMs }),
     page.evaluate((sel) => {
@@ -271,8 +266,7 @@ const extractToken = async (context) => {
  */
 const attemptAutoScrape = async (browser) => {
   const context = await browser.newContext({
-    userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    userAgent: DEFAULT_USER_AGENT,
   });
   const page = await context.newPage();
 
@@ -296,8 +290,7 @@ const attemptAutoScrape = async (browser) => {
 const attemptManualScrape = async (browser) => {
   const savedCookies = loadSession();
   const context = await browser.newContext({
-    userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    userAgent: DEFAULT_USER_AGENT,
   });
 
   if (savedCookies) {
@@ -320,10 +313,9 @@ const attemptManualScrape = async (browser) => {
     if (isOnLoginPage) {
       // Isi credential dulu, biarkan user selesaikan CAPTCHA secara manual
       if (config.scraper.loginEmail && config.scraper.loginPassword) {
-        logger.info('[Scraper] Mengisi credential otomatis sebelum user solve CAPTCHA...');
         await page.fill(SELECTORS.usernameInput, config.scraper.loginEmail);
         await page.fill(SELECTORS.passwordInput, config.scraper.loginPassword);
-        logger.info('[Scraper] Credential terisi. Silakan selesaikan CAPTCHA secara manual.');
+        logger.info('[Scraper] Credential terisi otomatis. Silakan selesaikan CAPTCHA secara manual.');
       }
 
       await waitForUserInput();
