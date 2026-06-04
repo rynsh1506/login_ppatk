@@ -1,32 +1,36 @@
 # PPATK Token Scraper API
 
-REST API for scraping PPATK session tokens using **Playwright (headless)** with automated **reCAPTCHA bypass**.
+REST API for scraping PPATK session tokens using **Playwright** with a flexible, **hybrid reCAPTCHA strategy**.
 
 ## Tech Stack
 - **Node.js** (v18+)
 - **Express.js** - REST API framework
 - **playwright-extra** - Headless browser automation
-- **puppeteer-extra-plugin-recaptcha** - reCAPTCHA solver (2Captcha / Anti-Captcha)
+- **puppeteer-extra-plugin-stealth** - Bot detection bypass (free)
+- **puppeteer-extra-plugin-recaptcha** - reCAPTCHA solver (for paid providers)
 - **winston** - Structured logging
 
 ## Project Structure
 ```
 ├── src/
-│   ├── config/config.js          # Centralized config from .env
-│   ├── utils/logger.js           # Winston logger
-│   ├── utils/responseHelper.js   # Standard API response helpers
-│   ├── services/browser.js       # Playwright browser launcher
-│   ├── services/scraper.js       # Core scraping logic + retry
+│   ├── config/config.js              # Centralized config from .env
+│   ├── utils/logger.js               # Winston logger
+│   ├── utils/responseHelper.js       # Standard API response helpers
+│   ├── services/browser.js           # Playwright launcher with strategy pattern
+│   ├── services/scraper.js           # Core scraping logic (auto + manual)
 │   ├── controllers/tokenController.js
 │   ├── routes/tokenRoutes.js
 │   ├── middlewares/requestLogger.js
 │   ├── middlewares/errorHandler.js
-│   └── app.js                    # Express app setup
-├── server.js                     # Server entry point
-├── logs/                         # Auto-generated log files
+│   └── app.js                        # Express app setup
+├── server.js                         # Server entry point
+├── session.json                      # Auto-generated (manual strategy only)
+├── logs/                             # Auto-generated log files
 ├── .env.example
 └── package.json
 ```
+
+---
 
 ## Setup
 
@@ -39,24 +43,58 @@ npx playwright install chromium
 ### 2. Configure environment
 ```bash
 cp .env.example .env
-# Edit .env and fill in your CAPTCHA_API_KEY and TARGET_URL
+# Edit .env — pilih CAPTCHA_STRATEGY yang sesuai (lihat tabel di bawah)
 ```
 
 ### 3. Run the server
 ```bash
 npm start
-# or for development with auto-reload:
+# atau untuk development dengan auto-reload:
 npm run dev
 ```
+
+---
+
+## Captcha Strategy
+
+Pilih strategi yang sesuai kebutuhan lewat variabel `CAPTCHA_STRATEGY` di file `.env`:
+
+| Strategy | Biaya | API Key | Keterangan |
+|---|---|---|---|
+| `stealth` | **Gratis** | ❌ Tidak perlu | Default. Gunakan stealth plugin untuk menghindari deteksi bot. Cocok untuk situs dengan captcha tidak terlalu ketat. |
+| `manual` | **Gratis** | ❌ Tidak perlu | Browser terbuka visual (non-headless). User solve captcha sekali, **session disimpan otomatis** di `session.json` dan dipakai kembali hingga expired. |
+| `capsolver` | **Free tier** | ✅ Perlu | Daftar di [capsolver.com](https://capsolver.com). Ada free credits untuk akun baru. Isi `CAPTCHA_API_KEY` di `.env`. |
+| `2captcha` | **Berbayar** | ✅ Perlu | ~$2-3 per 1000 solve. Daftar di [2captcha.com](https://2captcha.com). Isi `CAPTCHA_API_KEY` di `.env`. |
+
+### Contoh konfigurasi `.env`
+
+**Stealth (default, gratis):**
+```env
+CAPTCHA_STRATEGY=stealth
+```
+
+**Manual (gratis, butuh intervensi pertama kali):**
+```env
+CAPTCHA_STRATEGY=manual
+SESSION_FILE=session.json
+```
+
+**Capsolver (free tier):**
+```env
+CAPTCHA_STRATEGY=capsolver
+CAPTCHA_API_KEY=CAP-xxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+---
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/health` | Health check |
-| GET | `/api/v1/token` | Scrape and return PPATK token |
+| GET | `/api/v1/token` | Scrape dan return PPATK token |
 
-### Example Response (Success)
+### Contoh Response (Sukses)
 ```json
 {
   "success": true,
@@ -66,7 +104,7 @@ npm run dev
 }
 ```
 
-### Example Response (Error)
+### Contoh Response (Error)
 ```json
 {
   "success": false,
@@ -74,11 +112,15 @@ npm run dev
 }
 ```
 
-## Logs
-- `logs/combined.log` - All log entries (info, warn, error)
-- `logs/error.log` - Error entries only
+---
 
-## ⚠️ Important Notes
-- You need a valid **2Captcha or Anti-Captcha API key** in `.env` for reCAPTCHA bypass to work.
-- Update the **SELECTORS** object in `src/services/scraper.js` to match the actual PPATK page elements.
-- Playwright is resource-intensive; each API call spawns a headless browser — ensure your server has adequate memory.
+## Logs
+- `logs/combined.log` - Semua log (info, warn, error)
+- `logs/error.log` - Error saja
+
+---
+
+## ⚠️ Catatan Penting
+- Update **SELECTORS** di `src/services/scraper.js` sesuai elemen halaman PPATK target.
+- Untuk strategi `manual`: session akan otomatis dihapus dan diminta ulang jika sudah expired.
+- Playwright cukup berat memori — satu API call membuka satu instance browser. Pastikan server memiliki RAM yang cukup.
