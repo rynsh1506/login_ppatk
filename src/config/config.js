@@ -19,11 +19,13 @@ const config = {
     apiKey: process.env.CAPTCHA_API_KEY || '',
   },
   scraper: {
-    targetUrl: process.env.TARGET_URL || 'https://pelaporan.ppatk.go.id',
-    maxRetries: 3,
-    retryDelayMs: 2000,
-    timeoutMs: 60000,
-    sessionFile: process.env.SESSION_FILE || 'session.json',
+    targetUrl:     process.env.TARGET_URL     || 'https://pep.ppatk.go.id/admin/user/login',
+    loginEmail:    process.env.LOGIN_EMAIL    || '',
+    loginPassword: process.env.LOGIN_PASSWORD || '',
+    maxRetries:    3,
+    retryDelayMs:  2000,
+    timeoutMs:     60000,
+    sessionFile:   process.env.SESSION_FILE   || 'session.json',
   },
   logger: {
     level: process.env.LOG_LEVEL || 'info',
