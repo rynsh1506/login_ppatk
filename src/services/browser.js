@@ -68,19 +68,43 @@ const launchBrowser = async () => {
 
   applyStrategy(strategy);
 
-  // Manual strategy must run non-headless so the user can see the page
-  const isHeadless = strategy !== 'manual';
+  // Manual strategy harus non-headless; strategi lain bisa dipaksa non-headless
+  // via env HEADLESS=false (berguna untuk debug / observasi stealth mode)
+  const envHeadless = process.env.HEADLESS?.toLowerCase();
+  const isHeadless = strategy !== 'manual' && envHeadless !== 'false';
 
   logger.info(`[Browser] Launching ${isHeadless ? 'headless' : 'non-headless'} Chromium...`);
 
-  const browser = await chromium.launch({
+  // Bangun opsi launch browser secara dinamis
+  const launchOptions = {
     headless: isHeadless,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage', // Important for low-memory / Docker environments
     ],
-  });
+  };
+
+  // Suntikkan konfigurasi proxy jika diaktifkan
+  if (config.proxy && config.proxy.useProxy) {
+    if (!config.proxy.server) {
+      logger.warn('[Browser] Proxy diaktifkan (USE_PROXY=true) tapi PROXY_SERVER kosong!');
+    } else {
+      logger.info(`[Browser] Menggunakan proxy server: ${config.proxy.server}`);
+      const proxyConfig = {
+        server: config.proxy.server,
+      };
+
+      if (config.proxy.username) {
+        proxyConfig.username = config.proxy.username;
+        proxyConfig.password = config.proxy.password;
+      }
+
+      launchOptions.proxy = proxyConfig;
+    }
+  }
+
+  const browser = await chromium.launch(launchOptions);
 
   logger.info('[Browser] Browser launched successfully.');
   return browser;

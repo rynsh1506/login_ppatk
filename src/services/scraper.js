@@ -120,15 +120,101 @@ const performLogin = async (page) => {
     }
     logger.info(`[Login] reCAPTCHA solved (count: ${solved?.length ?? 0}).`);
   } else if (strategy === 'stealth') {
-    // Stealth mode: browser terlihat seperti user biasa, semoga reCAPTCHA tidak muncul
-    logger.info('[Login] Stealth mode — mencoba submit tanpa solver. reCAPTCHA mungkin tidak muncul jika terdeteksi sebagai browser normal.');
+    // Stealth mode: gerakkan kursor secara natural lalu klik reCAPTCHA checkbox
+    logger.info('[Login] Stealth mode — mencari reCAPTCHA checkbox...');
+
+    try {
+      // Tunggu iframe reCAPTCHA muncul (maks 8 detik)
+      const recaptchaFrame = await page.frameLocator('iframe[title*="reCAPTCHA"]').first();
+
+      // Tunggu checkbox visible di dalam iframe
+      const checkbox = recaptchaFrame.locator('.recaptcha-checkbox-border');
+      await checkbox.waitFor({ state: 'visible', timeout: 8000 });
+
+      // Ambil koordinat bounding box checkbox (dalam viewport halaman utama)
+      // Playwright frameLocator tidak support boundingBox langsung — kita pakai evaluateHandle
+      const frameElement = await page.$('iframe[title*="reCAPTCHA"]');
+      const frameBox    = await frameElement.boundingBox();
+
+      // Ambil boundingBox elemen di dalam frame via evaluate
+      const checkboxBox = await recaptchaFrame.locator('.recaptcha-checkbox-border').evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.left, y: r.top, width: r.width, height: r.height };
+      });
+
+      // Koordinat target di viewport halaman (frame offset + elemen offset)
+      const targetX = frameBox.x + checkboxBox.x + checkboxBox.width  / 2;
+      const targetY = frameBox.y + checkboxBox.y + checkboxBox.height / 2;
+
+      // ── Gerakan kursor natural sebelum klik ─────────────────────────────────
+      // Mulai dari posisi acak di area form
+      const startX = 300 + Math.random() * 200;
+      const startY = 200 + Math.random() * 150;
+      await page.mouse.move(startX, startY);
+      await sleep(300 + Math.random() * 400);
+
+      // Buat beberapa waypoint acak menuju checkbox agar terlihat natural
+      const steps = 5 + Math.floor(Math.random() * 4); // 5–8 titik waypoint
+      for (let i = 1; i <= steps; i++) {
+        const ratio    = i / steps;
+        // Tambahkan jitter ±30px agar jalur tidak lurus sempurna
+        const jitterX  = (Math.random() - 0.5) * 60;
+        const jitterY  = (Math.random() - 0.5) * 60;
+        const wx       = startX + (targetX - startX) * ratio + jitterX;
+        const wy       = startY + (targetY - startY) * ratio + jitterY;
+        await page.mouse.move(wx, wy, { steps: 8 });
+        await sleep(50 + Math.random() * 100);
+      }
+
+      // Pause sebentar sebelum klik (seperti user yang membaca sebelum checklist)
+      await sleep(400 + Math.random() * 600);
+
+      // Gerakkan ke posisi target persis
+      await page.mouse.move(targetX, targetY, { steps: 5 });
+      await sleep(200 + Math.random() * 300);
+
+      // Klik checkbox
+      logger.info(`[Login] Stealth — klik reCAPTCHA checkbox di (${targetX.toFixed(0)}, ${targetY.toFixed(0)})`);
+      await page.mouse.click(targetX, targetY);
+
+      // Tunggu reCAPTCHA selesai diproses (aria-checked="true" artinya solved)
+      logger.info('[Login] Stealth — menunggu reCAPTCHA selesai diproses...');
+      try {
+        // Cek apakah checkbox berubah jadi checked dalam 15 detik
+        await recaptchaFrame
+          .locator('#recaptcha-anchor[aria-checked="true"]')
+          .waitFor({ state: 'attached', timeout: 15000 });
+        logger.info('[Login] Stealth — reCAPTCHA ✅ solved (checkbox checked).');
+      } catch {
+        // Cek apakah muncul image challenge (bframe = challenge iframe)
+        const challengeVisible = await page
+          .$('iframe[title*="recaptcha challenge"], iframe[src*="bframe"]')
+          .then((el) => !!el)
+          .catch(() => false);
+
+        if (challengeVisible) {
+          logger.warn('[Login] Stealth — ⚠️  reCAPTCHA image challenge muncul! Stealth mode tidak bisa solve ini.');
+          logger.warn('[Login] Stealth — Ganti CAPTCHA_STRATEGY=manual di .env untuk solve secara manual.');
+        } else {
+          logger.warn('[Login] Stealth — timeout menunggu reCAPTCHA, lanjut submit...');
+        }
+      }
+    } catch (captchaErr) {
+      logger.warn(`[Login] Stealth — reCAPTCHA checkbox tidak ditemukan atau gagal diklik: ${captchaErr.message}`);
+      logger.info('[Login] Stealth — melanjutkan submit tanpa klik CAPTCHA (mungkin tidak ada CAPTCHA).');
+    }
   }
 
   // Submit form dan tunggu navigasi
+  // Gunakan JS dispatchEvent sebagai fallback jika ada overlay menghalangi klik biasa
   logger.info('[Login] Klik tombol Login...');
   await Promise.all([
     page.waitForNavigation({ timeout: timeoutMs }),
-    page.click(SELECTORS.loginButton),
+    page.evaluate((sel) => {
+      const btn = document.querySelector(sel);
+      if (!btn) throw new Error(`Tombol tidak ditemukan: ${sel}`);
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    }, SELECTORS.loginButton),
   ]);
 
   // Verifikasi: URL harus berubah (bukan kembali ke /login)
