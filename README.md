@@ -86,6 +86,7 @@ Berikut adalah tabel referensi lengkap semua variabel yang dapat dikonfigurasi d
 | Nama Variabel | Wajib/Opsional | Nilai Default | Keterangan |
 | :--- | :--- | :--- | :--- |
 | `PORT` | Opsional | `3000` | Port tempat server Express berjalan. |
+| `HEADLESS` | Opsional | `true` | Menentukan apakah browser dijalankan secara headless (tanpa visual) atau tidak (`true`/`false`). |
 | `NODE_ENV` | Opsional | `development` | Mode berjalannya aplikasi (`development` atau `production`). |
 | `LOG_LEVEL` | Opsional | `info` | Batas tingkat log yang disimpan (`error`, `warn`, `info`, `debug`). |
 
