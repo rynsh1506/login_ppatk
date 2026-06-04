@@ -1,0 +1,23 @@
+{
+  "name": "ppatk-token-scraper",
+  "version": "1.0.0",
+  "description": "REST API for scraping PPATK tokens using Playwright (headless) with reCAPTCHA bypass",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["playwright", "scraper", "ppatk", "express", "api"],
+  "author": "rynsh1506",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-recaptcha": "^3.6.8",
+    "winston": "^3.13.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
