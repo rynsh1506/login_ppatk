@@ -7,10 +7,18 @@ const config = require('../config/config');
 const logger = require('../utils/logger');
 
 // ─── Selectors ─────────────────────────────────────────────────────────────────
-// NOTE: Update these selectors when the PPATK page structure changes.
+// Verified directly from DOM of https://pep.ppatk.go.id/admin/user/login
+// NOTE: Update these if the PPATK page structure ever changes.
 const SELECTORS = {
-  tokenInputField: 'input[name="token"]', // Adjust to actual field selector
-  loginButton: 'button[type="submit"]',   // Adjust to actual submit button
+  usernameInput:     'input[name="username"]',   // type="text", placeholder="Username"
+  passwordInput:     'input[name="password"]',   // type="password", placeholder="Password"
+  loginButton:       'button#btn-login',          // id="btn-login", class="btn btn-lg btn-primary btn-block"
+
+  // Token/session location after login:
+  // The site uses a PHP session cookie. After login, check DevTools →
+  // Application → Cookies → pep.ppatk.go.id to find the session cookie name.
+  // Common names: 'PHPSESSID', '_identity-backend', or similar.
+  sessionCookieName: '_identity-backend',        // TODO: verify this after first manual login
 };
 
 const SESSION_FILE = path.resolve(config.scraper.sessionFile);
@@ -21,10 +29,10 @@ const SESSION_FILE = path.resolve(config.scraper.sessionFile);
  */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// ─── Manual Strategy Helpers ───────────────────────────────────────────────────
+// ─── Session Helpers ───────────────────────────────────────────────────────────
 
 /**
- * Loads saved session cookies from disk (used by 'manual' strategy).
+ * Loads saved session cookies from disk.
  * Returns null if no session file exists yet.
  *
  * @returns {Array|null} Array of cookie objects, or null if not found
@@ -38,7 +46,7 @@ const loadSession = () => {
 };
 
 /**
- * Saves current cookies to disk for future re-use.
+ * Saves current browser cookies to disk for future re-use.
  *
  * @param {import('playwright').BrowserContext} context
  */
@@ -50,13 +58,13 @@ const saveSession = async (context) => {
 
 /**
  * Waits for the user to press Enter in the terminal.
- * Used in 'manual' strategy to pause and let the user solve the captcha.
+ * Used in 'manual' strategy to pause while user solves the CAPTCHA.
  */
 const waitForUserInput = () => {
   return new Promise((resolve) => {
     logger.info('─────────────────────────────────────────────────────');
-    logger.info('[MANUAL MODE] Please solve the CAPTCHA in the browser.');
-    logger.info('[MANUAL MODE] Press ENTER here when done...');
+    logger.info('[MANUAL MODE] Selesaikan CAPTCHA di browser yang terbuka.');
+    logger.info('[MANUAL MODE] Tekan ENTER di sini setelah selesai login...');
     logger.info('─────────────────────────────────────────────────────');
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
@@ -67,14 +75,113 @@ const waitForUserInput = () => {
   });
 };
 
-// ─── Core Scrape Logic ─────────────────────────────────────────────────────────
+// ─── Login Logic ───────────────────────────────────────────────────────────────
 
 /**
- * Attempts a single scrape using the 'stealth', 'capsolver', or '2captcha' strategy.
- * reCAPTCHA is handled by the browser plugin (or evaded by stealth).
+ * Performs automated login using credentials from .env.
+ * Works for strategy: stealth | capsolver | 2captcha.
+ *
+ * Flow:
+ *  1. Navigate to login page
+ *  2. Fill username + password
+ *  3. If strategy uses a solver plugin → solve reCAPTCHA first
+ *  4. Click login button and wait for redirect
+ *  5. Verify redirect away from /login page
+ *
+ * @param {import('playwright').Page} page
+ */
+const performLogin = async (page) => {
+  const { loginEmail, loginPassword, targetUrl, timeoutMs } = config.scraper;
+  const strategy = config.captcha.strategy;
+
+  // Guard: credentials must be set
+  if (!loginEmail || !loginPassword) {
+    throw new Error(
+      '[Login] LOGIN_EMAIL atau LOGIN_PASSWORD belum diisi di file .env. ' +
+      'Salin .env.example ke .env lalu isi nilai yang benar.'
+    );
+  }
+
+  logger.info(`[Login] Navigating to: ${targetUrl}`);
+  await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: timeoutMs });
+
+  // Fill credentials
+  logger.info(`[Login] Mengisi username: ${loginEmail}`);
+  await page.fill(SELECTORS.usernameInput, loginEmail);
+  await page.fill(SELECTORS.passwordInput, loginPassword);
+  logger.info('[Login] Credentials terisi.');
+
+  // Solve reCAPTCHA jika strategy menggunakan solver berbayar
+  if (['capsolver', '2captcha'].includes(strategy)) {
+    logger.info(`[Login] Solving reCAPTCHA via ${strategy}...`);
+    const { solved, error: captchaError } = await page.solveRecaptchas();
+    if (captchaError) {
+      throw new Error(`[Login] reCAPTCHA solve gagal: ${captchaError}`);
+    }
+    logger.info(`[Login] reCAPTCHA solved (count: ${solved?.length ?? 0}).`);
+  } else if (strategy === 'stealth') {
+    // Stealth mode: browser terlihat seperti user biasa, semoga reCAPTCHA tidak muncul
+    logger.info('[Login] Stealth mode — mencoba submit tanpa solver. reCAPTCHA mungkin tidak muncul jika terdeteksi sebagai browser normal.');
+  }
+
+  // Submit form dan tunggu navigasi
+  logger.info('[Login] Klik tombol Login...');
+  await Promise.all([
+    page.waitForNavigation({ timeout: timeoutMs }),
+    page.click(SELECTORS.loginButton),
+  ]);
+
+  // Verifikasi: URL harus berubah (bukan kembali ke /login)
+  const currentUrl = page.url();
+  if (currentUrl.includes('/login')) {
+    throw new Error(
+      '[Login] Login GAGAL — URL masih di halaman login. ' +
+      'Kemungkinan: password salah, atau reCAPTCHA belum terselesaikan. ' +
+      'Coba strategy "manual" untuk solve captcha secara manual.'
+    );
+  }
+
+  logger.info(`[Login] Login berhasil! Redirected ke: ${currentUrl}`);
+};
+
+// ─── Token Extraction ─────────────────────────────────────────────────────────
+
+/**
+ * Extracts the session token from browser cookies after a successful login.
+ * Logs all available cookie names if the expected cookie is not found.
+ *
+ * @param {import('playwright').BrowserContext} context
+ * @returns {Promise<string>} The session token value
+ */
+const extractToken = async (context) => {
+  const cookies = await context.cookies();
+
+  const sessionCookie = cookies.find((c) => c.name === SELECTORS.sessionCookieName);
+  const token = sessionCookie?.value;
+
+  if (!token) {
+    const cookieNames = cookies.map((c) => c.name).join(', ');
+    logger.warn(`[Scraper] Cookie "${SELECTORS.sessionCookieName}" tidak ditemukan.`);
+    logger.warn(`[Scraper] Cookie yang tersedia: ${cookieNames || '(tidak ada)'}`);
+    throw new Error(
+      `[Scraper] Token tidak ditemukan di cookie "${SELECTORS.sessionCookieName}". ` +
+      'Buka DevTools (F12) → Application → Cookies → pep.ppatk.go.id setelah login manual ' +
+      'untuk menemukan nama cookie yang benar, lalu update SELECTORS.sessionCookieName di scraper.js.'
+    );
+  }
+
+  logger.info(`[Scraper] Token berhasil ditemukan: ${token.substring(0, 20)}...`);
+  return token;
+};
+
+// ─── Auto Scrape (stealth / capsolver / 2captcha) ─────────────────────────────
+
+/**
+ * Automated scrape: login with credentials → solve captcha via plugin (if applicable)
+ * → extract session token from cookies.
  *
  * @param {import('playwright').Browser} browser
- * @returns {Promise<string>} The extracted token
+ * @returns {Promise<string>} The session token
  */
 const attemptAutoScrape = async (browser) => {
   const context = await browser.newContext({
@@ -84,48 +191,21 @@ const attemptAutoScrape = async (browser) => {
   const page = await context.newPage();
 
   try {
-    logger.info(`[Scraper] Navigating to: ${config.scraper.targetUrl}`);
-    await page.goto(config.scraper.targetUrl, {
-      waitUntil: 'networkidle',
-      timeout: config.scraper.timeoutMs,
-    });
-
-    // Only call solveRecaptchas() if using a solver plugin (not for stealth)
-    if (['capsolver', '2captcha'].includes(config.captcha.strategy)) {
-      logger.info('[Scraper] Solving reCAPTCHA via plugin...');
-      const { solved, error: captchaError } = await page.solveRecaptchas();
-      if (captchaError) {
-        throw new Error(`reCAPTCHA solve failed: ${captchaError}`);
-      }
-      logger.info(`[Scraper] reCAPTCHA solved (count: ${solved?.length ?? 0}).`);
-    } else {
-      logger.info('[Scraper] Stealth mode — skipping solver, attempting natural navigation.');
-    }
-
-    await page.click(SELECTORS.loginButton);
-    await page.waitForNavigation({ timeout: config.scraper.timeoutMs });
-
-    const token = await page.inputValue(SELECTORS.tokenInputField).catch(() => null);
-
-    if (!token) {
-      throw new Error('Token not found in the page.');
-    }
-
-    logger.info(`[Scraper] Token extracted: ${token.substring(0, 20)}...`);
-    return token;
+    await performLogin(page);
+    return await extractToken(context);
   } finally {
     await context.close().catch((err) => logger.warn('[Scraper] Failed to close context:', err));
   }
 };
 
+// ─── Manual Scrape ─────────────────────────────────────────────────────────────
+
 /**
- * Attempts a single scrape using the 'manual' strategy:
- *  1. Try to load cookies from saved session file first.
- *  2. If no session, open browser non-headless, wait for user to login manually,
- *     save the session, then extract the token.
+ * Manual scrape: reuse saved session if available, otherwise open non-headless browser
+ * and wait for user to login and solve CAPTCHA manually, then save session for future use.
  *
  * @param {import('playwright').Browser} browser
- * @returns {Promise<string>} The extracted token
+ * @returns {Promise<string>} The session token
  */
 const attemptManualScrape = async (browser) => {
   const savedCookies = loadSession();
@@ -134,10 +214,9 @@ const attemptManualScrape = async (browser) => {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   });
 
-  // Re-inject saved cookies to skip login if session already exists
   if (savedCookies) {
     await context.addCookies(savedCookies);
-    logger.info('[Scraper] Session cookies injected. Attempting to skip login...');
+    logger.info('[Scraper] Session cookies dari file berhasil di-inject. Mencoba skip login...');
   }
 
   const page = await context.newPage();
@@ -149,32 +228,43 @@ const attemptManualScrape = async (browser) => {
       timeout: config.scraper.timeoutMs,
     });
 
-    // Check if we still need to login (session may have expired)
-    const needsLogin = !savedCookies || (await page.$(SELECTORS.loginButton)) !== null;
+    // Cek apakah masih di halaman login (session expired atau belum pernah login)
+    const isOnLoginPage = page.url().includes('/login');
 
-    if (needsLogin) {
-      logger.info('[Scraper] Login required. Waiting for user to solve captcha manually...');
+    if (isOnLoginPage) {
+      // Isi credential dulu, biarkan user selesaikan CAPTCHA secara manual
+      if (config.scraper.loginEmail && config.scraper.loginPassword) {
+        logger.info('[Scraper] Mengisi credential otomatis sebelum user solve CAPTCHA...');
+        await page.fill(SELECTORS.usernameInput, config.scraper.loginEmail);
+        await page.fill(SELECTORS.passwordInput, config.scraper.loginPassword);
+        logger.info('[Scraper] Credential terisi. Silakan selesaikan CAPTCHA secara manual.');
+      }
+
       await waitForUserInput();
 
-      // Save session after user completes login
+      // Tunggu sampai URL berubah dari halaman login
+      await page.waitForURL((url) => !url.includes('/login'), {
+        timeout: config.scraper.timeoutMs,
+      }).catch(() => {
+        throw new Error('[Manual] Timeout menunggu redirect setelah login manual.');
+      });
+
       await saveSession(context);
     } else {
-      logger.info('[Scraper] Session is still valid. Proceeding without login.');
+      logger.info('[Scraper] Session masih valid, langsung ambil token.');
     }
 
-    const token = await page.inputValue(SELECTORS.tokenInputField).catch(() => null);
-
-    if (!token) {
-      // Session might be expired — delete saved session and signal retry
-      if (fs.existsSync(SESSION_FILE)) {
-        fs.unlinkSync(SESSION_FILE);
-        logger.warn('[Scraper] Token not found. Deleted stale session file. Will retry with fresh login.');
-      }
-      throw new Error('Token not found in the page. Session may have expired.');
-    }
-
-    logger.info(`[Scraper] Token extracted: ${token.substring(0, 20)}...`);
+    // Extract token
+    const token = await extractToken(context);
     return token;
+
+  } catch (err) {
+    // Hapus session file yang stale jika token tidak ditemukan
+    if (err.message.includes('Token tidak ditemukan') && fs.existsSync(SESSION_FILE)) {
+      fs.unlinkSync(SESSION_FILE);
+      logger.warn('[Scraper] Session stale dihapus. Request berikutnya akan login ulang.');
+    }
+    throw err;
   } finally {
     await context.close().catch((err) => logger.warn('[Scraper] Failed to close context:', err));
   }
@@ -184,9 +274,9 @@ const attemptManualScrape = async (browser) => {
 
 /**
  * Main scraper function with retry logic.
- * Delegates to the correct strategy (auto or manual) based on config.
+ * Dispatches to the correct scrape function based on CAPTCHA_STRATEGY.
  *
- * @returns {Promise<string>} The extracted PPATK token
+ * @returns {Promise<string>} The extracted PPATK session token
  */
 const scrapeToken = async () => {
   const { maxRetries, retryDelayMs } = config.scraper;
@@ -197,7 +287,7 @@ const scrapeToken = async () => {
     browser = await launchBrowser();
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      logger.info(`[Scraper] Attempt ${attempt} of ${maxRetries} (strategy: ${strategy})...`);
+      logger.info(`[Scraper] Attempt ${attempt}/${maxRetries} (strategy: ${strategy})...`);
       try {
         const token =
           strategy === 'manual'
