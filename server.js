@@ -14,6 +14,7 @@ const server = app.listen(PORT, () => {
   logger.info(`  Environment : ${config.app.env}`);
   logger.info(`  Server      : http://localhost:${PORT}`);
   logger.info(`  Token API   : http://localhost:${PORT}/api/v1/token`);
+  logger.info(`  Search API  : http://localhost:${PORT}/api/v1/search`);
   logger.info(`  Health      : http://localhost:${PORT}/health`);
   logger.info(`========================================`);
 });

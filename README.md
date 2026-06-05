@@ -158,6 +158,7 @@ CAPTCHA_API_KEY=CAP-XXXXXXXXXXXXXXXXXXXXXXXX
 | :--- | :--- | :--- |
 | **GET** | `/health` | Pemeriksaan kesehatan aplikasi (Health check). |
 | **GET** | `/api/v1/token` | Memulai proses scraping dan mengembalikan token PPATK terbaru. |
+| **POST** | `/api/v1/search` | Mencari data PPATK secara langsung (*Direct Search* via Axios). Jauh lebih cepat karena fitur ini menyimpan cookies di memori dan file `cache.json`, dan hanya memanggil ulang Playwright bila cookie *expired*. Menerima payload JSON (contoh: `{"nik": "123..."}`) dan merespons dengan JSON data tabel. |
 
 ### Contoh Response (Sukses)
 ```json
