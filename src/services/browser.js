@@ -48,10 +48,14 @@ const applyStrategy = (strategy) => {
       logger.info('[Browser] Strategy: MANUAL — browser will open visually for user interaction.');
       break;
 
+    case 'whisper-local':
+      logger.info('[Browser] Strategy: WHISPER-LOCAL — Menggunakan audio challenge & model Whisper lokal.');
+      break;
+
     default:
       throw new Error(
         `[Browser] Unknown CAPTCHA_STRATEGY: "${strategy}". ` +
-        `Valid options: stealth | manual | capsolver | 2captcha`
+        `Valid options: stealth | manual | capsolver | 2captcha | whisper-local`
       );
   }
 };

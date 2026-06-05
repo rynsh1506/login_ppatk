@@ -2,9 +2,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 const { launchBrowser } = require('./browser');
 const config = require('../config/config');
 const logger = require('../utils/logger');
+const { transcribeAudioLocal } = require('../utils/transcriber');
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
@@ -79,6 +81,54 @@ const waitForUserInput = () => {
 
 // ─── Login Logic ───────────────────────────────────────────────────────────────
 
+const downloadAudio = (url, dest) => {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    https.get(url, (response) => {
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close(resolve);
+      });
+    }).on('error', (err) => {
+      fs.unlink(dest, () => reject(err));
+    });
+  });
+};
+
+const solveAudioChallenge = async (page) => {
+  const challengeFrameElement = await page.$('iframe[title*="recaptcha challenge"], iframe[src*="bframe"]');
+  if (!challengeFrameElement) {
+    throw new Error('Challenge frame tidak ditemukan.');
+  }
+  const challengeFrame = await challengeFrameElement.contentFrame();
+
+  logger.info('[Scraper] Mengklik tombol audio challenge...');
+  await challengeFrame.click('#recaptcha-audio-button');
+  await page.waitForTimeout(2000);
+
+  const downloadLink = await challengeFrame.$eval('.rc-audiochallenge-download-link', el => el.href);
+  logger.info(`[Scraper] URL Audio didapatkan: ${downloadLink}`);
+
+  const tempFolder = path.resolve(__dirname, '../../temp');
+  if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder);
+  const audioPath = path.join(tempFolder, `challenge_${Date.now()}.mp3`);
+
+  logger.info('[Scraper] Mengunduh audio challenge...');
+  await downloadAudio(downloadLink, audioPath);
+
+  logger.info('[Scraper] Mengirim audio ke Whisper lokal...');
+  const textResponse = await transcribeAudioLocal(audioPath);
+  
+  if (fs.existsSync(audioPath)) {
+    fs.unlinkSync(audioPath);
+  }
+
+  logger.info('[Scraper] Mengisi jawaban audio...');
+  await challengeFrame.fill('#audio-response', textResponse);
+  await challengeFrame.click('#recaptcha-verify-button');
+  await page.waitForTimeout(3000);
+};
+
 /**
  * Performs automated login using credentials from .env.
  * Works for strategy: stealth | capsolver | 2captcha.
@@ -119,7 +169,7 @@ const performLogin = async (page) => {
       throw new Error(`[Login] reCAPTCHA solve gagal: ${captchaError}`);
     }
     logger.info(`[Login] reCAPTCHA solved (count: ${solved?.length ?? 0}).`);
-  } else if (strategy === 'stealth') {
+  } else if (strategy === 'stealth' || strategy === 'whisper-local') {
     // Stealth mode: gerakkan kursor secara natural lalu klik reCAPTCHA checkbox
     try {
       // Tunggu iframe reCAPTCHA muncul (maks 8 detik)
@@ -189,8 +239,19 @@ const performLogin = async (page) => {
           .catch(() => false);
 
         if (challengeVisible) {
-          logger.warn('[Login] Stealth — ⚠️  reCAPTCHA image challenge muncul! Stealth mode tidak bisa solve ini.');
-          logger.warn('[Login] Stealth — Ganti CAPTCHA_STRATEGY=manual di .env untuk solve secara manual.');
+          if (strategy === 'whisper-local') {
+            logger.info('[Login] Ditantang oleh reCAPTCHA. Mulai memecahkan tantangan audio...');
+            await solveAudioChallenge(page);
+            
+            // Check if checked after audio challenge
+            await recaptchaFrame
+              .locator('#recaptcha-anchor[aria-checked="true"]')
+              .waitFor({ state: 'attached', timeout: 10000 });
+            logger.info('[Login] Whisper-Local — reCAPTCHA ✅ solved.');
+          } else {
+            logger.warn('[Login] Stealth — ⚠️  reCAPTCHA image challenge muncul! Stealth mode tidak bisa solve ini.');
+            logger.warn('[Login] Stealth — Ganti CAPTCHA_STRATEGY=manual di .env untuk solve secara manual.');
+          }
         } else {
           logger.warn('[Login] Stealth — timeout menunggu reCAPTCHA, lanjut submit...');
         }
