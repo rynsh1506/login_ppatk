@@ -32,6 +32,9 @@ const clearCache = () => {
   }
 };
 
+// Global Lock untuk mencegah Multiple Browser Spawns (RAM Spike Protection)
+let isScraping = false;
+
 /**
  * POST /api/v1/search
  * Menggunakan Axios untuk mencari data dengan memanfaatkan Cookie Cache dari file cache.json.
@@ -46,16 +49,26 @@ const executeDirectSearch = async (req, res) => {
     let csrfCache = cache ? cache.csrfToken : null;
 
     if (!cookieCache || !csrfCache) {
-      logger.info('[SearchController] Cache Cookie kosong/rusak. Menjalankan bot (Playwright) untuk Login...');
-      const loginResult = await scrapeToken();
-      cookieCache = loginResult.cookieString;
-      
-      logger.info('[SearchController] Mengekstrak CSRF Token perdana...');
-      csrfCache = await getCsrfToken(cookieCache);
+      // RAM Spike Protection: Tolak request jika sedang ada bot yang login
+      if (isScraping) {
+        return sendError(res, 'Sistem sedang memperbarui sesi login dari peladen PPATK. Silakan ulangi pencarian Anda dalam 10-15 detik.', 503);
+      }
 
-      // Simpan ke file
-      saveCache(cookieCache, csrfCache);
-      logger.info('[SearchController] Cache baru berhasil disimpan ke cache.json');
+      isScraping = true;
+      try {
+        logger.info('[SearchController] Cache Cookie kosong/rusak. Menjalankan bot (Playwright) untuk Login...');
+        const loginResult = await scrapeToken();
+        cookieCache = loginResult.cookieString;
+        
+        logger.info('[SearchController] Mengekstrak CSRF Token perdana...');
+        csrfCache = await getCsrfToken(cookieCache);
+
+        // Simpan ke file
+        saveCache(cookieCache, csrfCache);
+        logger.info('[SearchController] Cache baru berhasil disimpan ke cache.json');
+      } finally {
+        isScraping = false; // Buka kembali gembok setelah selesai atau error
+      }
     } else {
       logger.info('[SearchController] Menggunakan Cookie & CSRF dari File Cache (cache.json) ⚡');
     }
@@ -68,13 +81,23 @@ const executeDirectSearch = async (req, res) => {
       logger.warn('[SearchController] Session Expired! PPATK meminta login ulang. Menghapus File Cache...');
       clearCache();
 
-      // Jalankan ulang bot login sekali lagi
-      logger.info('[SearchController] Re-Login otomatis via Playwright...');
-      const loginResult = await scrapeToken();
-      cookieCache = loginResult.cookieString;
-      csrfCache = await getCsrfToken(cookieCache);
-      
-      saveCache(cookieCache, csrfCache);
+      // RAM Spike Protection
+      if (isScraping) {
+        return sendError(res, 'Sesi berakhir dan sistem sedang mencoba login kembali. Silakan ulangi dalam beberapa detik.', 503);
+      }
+
+      isScraping = true;
+      try {
+        // Jalankan ulang bot login sekali lagi
+        logger.info('[SearchController] Re-Login otomatis via Playwright...');
+        const loginResult = await scrapeToken();
+        cookieCache = loginResult.cookieString;
+        csrfCache = await getCsrfToken(cookieCache);
+        
+        saveCache(cookieCache, csrfCache);
+      } finally {
+        isScraping = false;
+      }
 
       // Tembak ulang Axios dengan cookie baru
       logger.info('[SearchController] Melakukan pencarian ulang dengan Cookie baru...');
