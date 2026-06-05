@@ -15,10 +15,11 @@ const logger = require('../utils/logger');
  */
 const applyStrategy = (strategy) => {
   switch (strategy) {
-    case 'stealth': {
+    case 'stealth':
+    case 'whisper-local': {
       const StealthPlugin = require('puppeteer-extra-plugin-stealth');
       chromium.use(StealthPlugin());
-      logger.info('[Browser] Strategy: STEALTH — using stealth plugin (no API key needed).');
+      logger.info(`[Browser] Strategy: ${strategy.toUpperCase()} — using stealth plugin.`);
       break;
     }
 
@@ -51,7 +52,7 @@ const applyStrategy = (strategy) => {
     default:
       throw new Error(
         `[Browser] Unknown CAPTCHA_STRATEGY: "${strategy}". ` +
-        `Valid options: stealth | manual | capsolver | 2captcha`
+        `Valid options: stealth | manual | capsolver | 2captcha | whisper-local`
       );
   }
 };

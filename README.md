@@ -6,7 +6,8 @@ REST API for scraping PPATK session tokens using **Playwright** with a flexible,
 - **Node.js** (v18+)
 - **Express.js** - REST API framework
 - **playwright-extra** - Headless browser automation
-- **puppeteer-extra-plugin-stealth** - Bot detection bypass (free)
+- **Python Whisper & ffmpeg-static** - Zero-cost Local Audio CAPTCHA Solver
+- **puppeteer-extra-plugin-stealth** - Bot detection bypass
 - **puppeteer-extra-plugin-recaptcha** - reCAPTCHA solver (for paid providers)
 - **winston** - Structured logging
 
@@ -39,10 +40,13 @@ Ikuti petunjuk di bawah ini untuk memasang dan menjalankan aplikasi di lingkunga
 ### Langkah 1: Pasang Dependensi
 Buka terminal di direktori proyek ini dan jalankan perintah berikut:
 ```bash
-# Mengunduh dependensi Node.js yang diperlukan
+# 1. Mengunduh dependensi Node.js (termasuk ffmpeg-static)
 npm install
 
-# Memasang modul Chromium yang dibutuhkan oleh Playwright
+# 2. Membangun ruang isolasi Python (.venv) dan menginstal Whisper AI secara otomatis
+npm run setup
+
+# 3. Memasang modul Chromium yang dibutuhkan oleh Playwright
 npx playwright install chromium
 ```
 
@@ -100,7 +104,7 @@ Berikut adalah tabel referensi lengkap semua variabel yang dapat dikonfigurasi d
 ### 3. Captcha Configuration
 | Nama Variabel | Wajib/Opsional | Nilai Default | Keterangan |
 | :--- | :--- | :--- | :--- |
-| `CAPTCHA_STRATEGY`| Opsional | `stealth` | Pilihan metode pemecahan captcha: `stealth`, `manual`, `capsolver`, atau `2captcha`. |
+| `CAPTCHA_STRATEGY`| Opsional | `stealth` | Pilihan metode pemecahan captcha: `whisper-local`, `stealth`, `manual`, `capsolver`, atau `2captcha`. |
 | `CAPTCHA_API_KEY` | Kondisional | *(Kosong)* | API Key dari Capsolver / 2Captcha (Wajib jika memilih strategi tersebut). |
 | `SESSION_FILE` | Opsional | `session.json` | Nama file untuk menyimpan session cookies yang valid (Khusus mode `manual`). |
 
@@ -116,8 +120,15 @@ Berikut adalah tabel referensi lengkap semua variabel yang dapat dikonfigurasi d
 
 ## 💡 Contoh Kasus Konfigurasi `.env`
 
-### Kasus A: Mode Gratis & Tanpa API Captcha (Stealth - Default)
-Mode paling praktis dan gratis. Menggunakan plugin stealth untuk menyamar sebagai pengguna biasa tanpa memicu reCAPTCHA ketat.
+### Kasus A: Whisper Local (Gratis, Fully Automated AI) - Paling Direkomendasikan
+Mode ini menggunakan AI Python (Whisper) lokal untuk mengunduh, mendengarkan, dan mengetikkan jawaban tantangan audio reCAPTCHA secara otomatis. 100% gratis selamanya tanpa API key.
+```env
+CAPTCHA_STRATEGY=whisper-local
+USE_PROXY=false
+```
+
+### Kasus B: Mode Gratis Tanpa API (Stealth)
+Menggunakan plugin stealth untuk menyamar sebagai pengguna biasa tanpa memicu reCAPTCHA ketat. Sering gagal jika IP memiliki trust score rendah.
 ```env
 CAPTCHA_STRATEGY=stealth
 USE_PROXY=false
@@ -151,10 +162,29 @@ CAPTCHA_API_KEY=CAP-XXXXXXXXXXXXXXXXXXXXXXXX
 ### Contoh Response (Sukses)
 ```json
 {
-  "success": true,
+  "status": "success",
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
+    "token": "f9f82814f17ce2ab2af522c067138cf8",
+    "cookieDict": {
+      "_csrf_backend": "3a74c7...",
+      "cookiesession1": "678B28...",
+      "PHPSESSID": "f9f82814..."
+    },
+    "cookieString": "_csrf_backend=3a74...; cookiesession1=678B...; PHPSESSID=f9f8...",
+    "rawCookies": [
+      {
+        "name": "_csrf_backend",
+        "value": "3a74c7...",
+        "domain": "pep.ppatk.go.id",
+        "path": "/",
+        "expires": 188,
+        "httpOnly": true,
+        "secure": true,
+        "sameSite": "Lax"
+      }
+    ]
+  },
+  "message": "Token berhasil di-scrape"
 }
 ```
 
@@ -176,6 +206,18 @@ Aplikasi menyimpan rekaman log aktivitas di folder `logs/`:
 ---
 
 ## ⚠️ Peringatan Penting
-1.  **Pembaruan Selector DOM:** Periksa dan sesuaikan konstanta `SELECTORS` di berkas `src/services/scraper.js` jika terdapat perubahan struktur HTML pada situs target.
-2.  **Penanganan Sesi Stale (Kadaluwarsa):** Pada strategi `manual`, jika token yang diambil tidak valid atau sesi kadaluwarsa, file `session.json` akan dihapus secara otomatis dan browser manual akan terbuka kembali untuk meminta login ulang pada request berikutnya.
-3.  **Kebutuhan RAM:** Playwright membutuhkan memori yang cukup karena setiap request akan membuka satu thread instance browser. Pastikan server Anda memiliki spesifikasi RAM yang memadai untuk memproses concurrent request.
+1.  **Multiple Correct Solutions:** Pada strategi `whisper-local`, jika Google mendeteksi IP Anda mencurigakan, ia akan meminta penyelesaian audio berulang (multiple correct solutions). Bot sudah dirancang untuk melakukan *looping* otomatis maksimal 5 ronde.
+2.  **Pemblokiran Network:** Jika reCAPTCHA menampilkan *"Your computer or network may be sending automated queries"*, tidak ada bot yang bisa menembusnya. Solusinya: gunakan koneksi Tethering (ganti IP), Proxy, atau tunggu beberapa jam.
+3.  **Kebutuhan RAM:** Playwright dan model AI Whisper `tiny` membutuhkan memori yang cukup. Pastikan server/PC memiliki setidaknya sisa RAM 1GB-2GB.
+
+---
+
+## 🐳 Deploy via Docker (Server Linux / Cloud)
+Jika Anda ingin menjalankan proyek ini di VPS atau Server Linux tanpa repot mengkonfigurasi Python dan Node.js:
+
+1. Pastikan Docker dan Docker Compose sudah terpasang di server.
+2. Jalankan perintah:
+```bash
+docker-compose up -d --build
+```
+Semua dependensi Node.js, FFmpeg, lingkungan Python, Playwright, dan model Whisper akan diunduh dan dirakit secara otomatis di dalam *container* terisolasi. API dapat langsung diakses via `http://localhost:3000`.

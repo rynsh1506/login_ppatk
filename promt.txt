@@ -1,0 +1,20 @@
+buatkan issue.md yang berisi perencanaan untuk nanti di implementasikan oleh junior programmer atau model ai yang lebih murah 
+
+isi dari planing nya sebagai berikut:
+
+coba kita ganti pakai audio aja dan targeting element nya ini class="rc-button goog-inline-block rc-button-audio" setelah udah teken capta nah terus lakukan ini 
+
+
+✅ Audio Challenge + Whisper Local
+Gratis total, tidak ada API key:
+
+reCAPTCHA punya tombol 🎧 audio
+Download audio → transcribe pakai Whisper (run lokal, gratis)
+Masukkan hasil ke input
+
+Ini yang paling worth diimplementasi kalau mau zero cost permanent.
+
+Jangka pendek → Manual + session reuse
+Jangka panjang → Audio + Whisper lokal
+
+tolong jelaskan dengan sangat detail tahapan - tahapan yang harus di lakukan untuk mengimplementasikan fitur ini anggap yang implementasi adalah juior programmer atau model AI yang lebih murah

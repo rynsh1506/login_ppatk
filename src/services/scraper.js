@@ -2,9 +2,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 const { launchBrowser } = require('./browser');
 const config = require('../config/config');
 const logger = require('../utils/logger');
+const { transcribeAudioLocal } = require('../utils/transcriber');
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
@@ -79,6 +81,77 @@ const waitForUserInput = () => {
 
 // ─── Login Logic ───────────────────────────────────────────────────────────────
 
+const downloadAudio = (url, dest) => {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    https.get(url, (response) => {
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close(resolve);
+      });
+    }).on('error', (err) => {
+      fs.unlink(dest, () => reject(err));
+    });
+  });
+};
+
+const solveAudioChallenge = async (page) => {
+  const challengeFrameElement = await page.$('iframe[title*="recaptcha challenge"], iframe[src*="bframe"]');
+  if (!challengeFrameElement) {
+    throw new Error('Challenge frame tidak ditemukan.');
+  }
+  const challengeFrame = await challengeFrameElement.contentFrame();
+
+  // Cek apakah kita sudah di tab audio (jika ada rentetan challenge)
+  const isAudioLinkVisible = await challengeFrame.locator('.rc-audiochallenge-tdownload-link').count();
+  if (isAudioLinkVisible === 0) {
+    logger.info('[Scraper] Beralih ke tab audio challenge...');
+    await sleep(1000);
+    await challengeFrame.click('#recaptcha-audio-button');
+    await sleep(2000);
+  }
+  
+  try {
+    // Tunggu secara pintar sampai tombol download audio muncul (maks 10 detik)
+    await challengeFrame.waitForSelector('.rc-audiochallenge-tdownload-link', { state: 'visible', timeout: 10000 });
+  } catch (err) {
+    // Jika tidak muncul, cek apakah Google memunculkan pesan error pemblokiran
+    const isBlocked = await challengeFrame.locator('.rc-doscaptcha-header-text').count();
+    if (isBlocked > 0) {
+      const errorMsg = await challengeFrame.$eval('.rc-doscaptcha-header-text', el => el.innerText);
+      throw new Error(`Google memblokir akses ke Audio Challenge: ${errorMsg}`);
+    }
+    throw new Error('Timeout menunggu link download audio reCAPTCHA muncul.');
+  }
+
+  const downloadLink = await challengeFrame.$eval('.rc-audiochallenge-tdownload-link', el => el.href);
+  logger.info(`[Scraper] URL Audio didapatkan: ${downloadLink}`);
+
+  const tempFolder = path.resolve(__dirname, '../../temp');
+  if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder);
+  const audioPath = path.join(tempFolder, `challenge_${Date.now()}.mp3`);
+
+  logger.info('[Scraper] Mengunduh audio challenge...');
+  await downloadAudio(downloadLink, audioPath);
+  await sleep(1000);
+
+  logger.info('[Scraper] Mengirim audio ke Whisper lokal...');
+  const textResponse = await transcribeAudioLocal(audioPath);
+  
+  if (fs.existsSync(audioPath)) {
+    fs.unlinkSync(audioPath);
+  }
+
+  logger.info('[Scraper] Mengisi jawaban audio...');
+  await sleep(1000);
+  await challengeFrame.fill('#audio-response', textResponse);
+  
+  await sleep(1000);
+  logger.info('[Scraper] Menekan Verify...');
+  await challengeFrame.click('#recaptcha-verify-button');
+  await sleep(3000);
+};
+
 /**
  * Performs automated login using credentials from .env.
  * Works for strategy: stealth | capsolver | 2captcha.
@@ -119,7 +192,7 @@ const performLogin = async (page) => {
       throw new Error(`[Login] reCAPTCHA solve gagal: ${captchaError}`);
     }
     logger.info(`[Login] reCAPTCHA solved (count: ${solved?.length ?? 0}).`);
-  } else if (strategy === 'stealth') {
+  } else if (strategy === 'stealth' || strategy === 'whisper-local') {
     // Stealth mode: gerakkan kursor secara natural lalu klik reCAPTCHA checkbox
     try {
       // Tunggu iframe reCAPTCHA muncul (maks 8 detik)
@@ -189,14 +262,51 @@ const performLogin = async (page) => {
           .catch(() => false);
 
         if (challengeVisible) {
-          logger.warn('[Login] Stealth — ⚠️  reCAPTCHA image challenge muncul! Stealth mode tidak bisa solve ini.');
-          logger.warn('[Login] Stealth — Ganti CAPTCHA_STRATEGY=manual di .env untuk solve secara manual.');
+          if (strategy === 'whisper-local') {
+            logger.info('[Login] Ditantang oleh reCAPTCHA. Mulai memecahkan tantangan audio...');
+            try {
+              let isSolved = false;
+              // Maksimal coba 5 kali berturut-turut untuk menghadapi "Multiple correct solutions"
+              for (let i = 1; i <= 5; i++) {
+                await solveAudioChallenge(page);
+                
+                // Tunggu sebentar untuk melihat apakah recaptcha terselesaikan
+                try {
+                  await recaptchaFrame
+                    .locator('#recaptcha-anchor[aria-checked="true"]')
+                    .waitFor({ state: 'attached', timeout: 5000 });
+                  isSolved = true;
+                  break; // Keluar dari loop jika sudah solved
+                } catch {
+                  // Belum solve, mungkin disuruh solve lagi
+                  logger.info(`[Login] Belum solved, kemungkinan diminta multiple audio challenge. Lanjut ke ronde ${i+1}...`);
+                }
+              }
+
+              if (!isSolved) {
+                throw new Error('Gagal menyelesaikan rentetan CAPTCHA setelah 5 ronde.');
+              }
+            } catch (err) {
+              throw new Error(`[AudioChallenge] ${err.message}`);
+            }
+            
+            logger.info('[Login] Whisper-Local — reCAPTCHA ✅ solved.');
+          } else {
+            logger.warn('[Login] Stealth — ⚠️  reCAPTCHA image challenge muncul! Stealth mode tidak bisa solve ini.');
+            logger.warn('[Login] Stealth — Ganti CAPTCHA_STRATEGY=manual di .env untuk solve secara manual.');
+          }
         } else {
           logger.warn('[Login] Stealth — timeout menunggu reCAPTCHA, lanjut submit...');
         }
       }
     } catch (captchaErr) {
-      logger.warn(`[Login] Stealth — reCAPTCHA checkbox tidak ditemukan atau gagal diklik: ${captchaErr.message}`);
+      logger.warn(`[Login] Stealth — reCAPTCHA issue: ${captchaErr.message}`);
+      
+      // Jika ini adalah error murni dari kegagalan Audio Challenge, jangan paksa login!
+      if (captchaErr.message.includes('[AudioChallenge]')) {
+        throw captchaErr;
+      }
+      
       logger.info('[Login] Stealth — melanjutkan submit tanpa klik CAPTCHA (mungkin tidak ada CAPTCHA).');
     }
   }
@@ -232,27 +342,41 @@ const performLogin = async (page) => {
  * Logs all available cookie names if the expected cookie is not found.
  *
  * @param {import('playwright').BrowserContext} context
- * @returns {Promise<string>} The session token value
+ * @returns {Promise<{token: string, cookies: object[]}>} Objek berisi token utama dan daftar semua cookies
  */
 const extractToken = async (context) => {
   const cookies = await context.cookies();
 
-  const sessionCookie = cookies.find((c) => c.name === SELECTORS.sessionCookieName);
-  const token = sessionCookie?.value;
+  let sessionCookie = cookies.find((c) => c.name === SELECTORS.sessionCookieName);
+  let token = sessionCookie?.value;
 
   if (!token) {
     const cookieNames = cookies.map((c) => c.name).join(', ');
-    logger.warn(`[Scraper] Cookie "${SELECTORS.sessionCookieName}" tidak ditemukan.`);
-    logger.warn(`[Scraper] Cookie yang tersedia: ${cookieNames || '(tidak ada)'}`);
-    throw new Error(
-      `[Scraper] Token tidak ditemukan di cookie "${SELECTORS.sessionCookieName}". ` +
-      'Buka DevTools (F12) → Application → Cookies → pep.ppatk.go.id setelah login manual ' +
-      'untuk menemukan nama cookie yang benar, lalu update SELECTORS.sessionCookieName di scraper.js.'
-    );
+    logger.warn(`[Scraper] Cookie spesifik "${SELECTORS.sessionCookieName}" tidak ditemukan, tapi login BERHASIL.`);
+    logger.warn(`[Scraper] Mengambil cookie yang tersedia: ${cookieNames || '(tidak ada)'}`);
+    
+    // Coba fallback ke PHPSESSID atau cookie lain sebagai "token" utama jika dibutuhkan
+    sessionCookie = cookies.find((c) => c.name === 'PHPSESSID' || c.name === 'cookiesession1');
+    token = sessionCookie?.value || '';
+  } else {
+    logger.info(`[Scraper] Token utama berhasil ditemukan: ${token.substring(0, 20)}...`);
   }
 
-  logger.info(`[Scraper] Token berhasil ditemukan: ${token.substring(0, 20)}...`);
-  return token;
+  // Merapikan format cookies agar gampang dikonsumsi klien API
+  const cookieDict = {};
+  const cookieStringParts = [];
+  cookies.forEach(c => {
+    cookieDict[c.name] = c.value;
+    cookieStringParts.push(`${c.name}=${c.value}`);
+  });
+  const cookieString = cookieStringParts.join('; ');
+
+  return { 
+    token, 
+    rawCookies: cookies, 
+    cookieDict, 
+    cookieString 
+  };
 };
 
 // ─── Auto Scrape (stealth / capsolver / 2captcha) ─────────────────────────────
@@ -378,9 +502,8 @@ const attemptManualScrape = async (browser) => {
 
 /**
  * Main scraper function with retry logic.
- * Dispatches to the correct scrape function based on CAPTCHA_STRATEGY.
  *
- * @returns {Promise<string>} The extracted PPATK session token
+ * @returns {Promise<{token: string, cookies: object[]}>} Objek hasil ekstraksi
  */
 const scrapeToken = async () => {
   const { maxRetries, retryDelayMs } = config.scraper;

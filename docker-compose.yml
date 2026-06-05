@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  ppatk-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ppatk-scraper-api
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - HEADLESS=true
+      # Anda bisa menambahkan env lain di sini sesuai file .env Anda
