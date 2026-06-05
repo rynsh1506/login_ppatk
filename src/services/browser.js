@@ -85,6 +85,10 @@ const launchBrowser = async () => {
     ],
   };
 
+  if (!isHeadless) {
+    launchOptions.args.push('--start-maximized');
+  }
+
   // Suntikkan konfigurasi proxy jika diaktifkan
   if (config.proxy && config.proxy.useProxy) {
     if (!config.proxy.server) {

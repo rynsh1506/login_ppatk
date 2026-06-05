@@ -265,9 +265,19 @@ const extractToken = async (context) => {
  * @returns {Promise<string>} The session token
  */
 const attemptAutoScrape = async (browser) => {
-  const context = await browser.newContext({
+  const strategy = config.captcha.strategy;
+  const envHeadless = process.env.HEADLESS?.toLowerCase();
+  const isHeadless = strategy !== 'manual' && envHeadless !== 'false';
+
+  const contextOptions = {
     userAgent: DEFAULT_USER_AGENT,
-  });
+  };
+
+  if (!isHeadless) {
+    contextOptions.viewport = null;
+  }
+
+  const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
 
   try {
@@ -289,9 +299,20 @@ const attemptAutoScrape = async (browser) => {
  */
 const attemptManualScrape = async (browser) => {
   const savedCookies = loadSession();
-  const context = await browser.newContext({
+  
+  const strategy = config.captcha.strategy;
+  const envHeadless = process.env.HEADLESS?.toLowerCase();
+  const isHeadless = strategy !== 'manual' && envHeadless !== 'false';
+
+  const contextOptions = {
     userAgent: DEFAULT_USER_AGENT,
-  });
+  };
+
+  if (!isHeadless) {
+    contextOptions.viewport = null;
+  }
+
+  const context = await browser.newContext(contextOptions);
 
   if (savedCookies) {
     await context.addCookies(savedCookies);
@@ -317,6 +338,11 @@ const attemptManualScrape = async (browser) => {
         await page.fill(SELECTORS.passwordInput, config.scraper.loginPassword);
         logger.info('[Scraper] Credential terisi otomatis. Silakan selesaikan CAPTCHA secara manual.');
       }
+
+      await page.evaluate(() => {
+        document.documentElement.style.setProperty('overflow', 'auto', 'important');
+        document.body.style.setProperty('overflow', 'auto', 'important');
+      });
 
       await waitForUserInput();
 
