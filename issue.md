@@ -1,123 +1,262 @@
-# Task: Implement IP Rotation and Proxy Support for PPATK Scraper
+# Task: Implementasi Solver reCAPTCHA Menggunakan Audio Challenge & Whisper Local (Zero-Cost Solver)
 
 ## 🎯 Objective
-Add robust **proxy support** and **IP rotation configuration** to the PPATK scraper codebase. This will allow the Playwright browser to route its traffic through external proxies, reducing the chance of being blocked by Google reCAPTCHA or target server rate-limiting.
 
-This issue specification is designed to be easily read and executed by a junior developer or a budget AI assistant.
+Saat ini, strategi pengatasan reCAPTCHA di aplikasi ini terbagi menjadi:
+1. `stealth` (hanya klik checkbox, jika ditantang gambar maka gagal).
+2. `manual` (memerlukan interaksi manusia penuh).
+3. `capsolver`/`2captcha` (berbayar, memerlukan API Key).
+
+Untuk mendapatkan solusi otomatis yang **100% gratis secara permanen (zero cost)**, kita akan menambahkan opsi strategy baru: **`whisper-local`**.
+
+### Konsep Utama:
+1. Ketika reCAPTCHA menantang pengguna, program akan mendeteksi tombol 🎧 **Audio Challenge** (`class="rc-button goog-inline-block rc-button-audio"` atau `#recaptcha-audio-button`).
+2. Program mengklik tombol audio tersebut.
+3. Program mengunduh file audio `.mp3` challenge yang disediakan oleh Google.
+4. Program memanggil **Whisper** secara lokal (menggunakan Python script / CLI) untuk mentranskripsi file audio menjadi teks.
+5. Memasukkan teks hasil transkripsi ke input response audio (`#audio-response`).
+6. Klik tombol Verify (`#recaptcha-verify-button`).
 
 ---
 
 ## 📂 Files to Create/Modify
-- **`[MODIFY]`** [.env](file:///d:/login_ppatk/.env) & [.env.example](file:///d:/login_ppatk/.env.example) — Add proxy configuration variables.
-- **`[MODIFY]`** [src/config/config.js](file:///d:/login_ppatk/src/config/config.js) — Map proxy env variables to the global config object.
-- **`[MODIFY]`** [src/services/browser.js](file:///d:/login_ppatk/src/services/browser.js) — Update browser launching options to apply the proxy config.
+
+- **`[NEW]`** `src/utils/transcriber.js` — Modul Node.js untuk mengeksekusi script Python Whisper secara lokal menggunakan `child_process`.
+- **`[NEW]`** `transcribe.py` — Script Python sederhana yang memuat library Whisper lokal, memproses audio, dan mencetak teks transkripsi ke `stdout`.
+- **`[MODIFY]`** `src/services/scraper.js` — Menambahkan alur deteksi audio challenge, unduh file, panggil transcriber, isi teks, dan verifikasi.
+- **`[MODIFY]`** `src/services/browser.js` — Mengaktifkan strategy `whisper-local` di pendaftaran plugin browser (tidak membutuhkan plugin recaptcha solver pihak ketiga).
+- **`[MODIFY]`** `src/config/config.js` — Menambahkan `whisper-local` sebagai opsi strategi yang valid.
+- **`[MODIFY]`** `.env.example` & `.env` — Dokumentasi opsi `CAPTCHA_STRATEGY=whisper-local`.
 
 ---
 
 ## 🛠️ Step-by-Step Implementation Guide
 
-### Step 1: Update Environment Configurations
-Add variables to configure the proxy in both `.env` and `.env.example`.
+### Step 1: Persiapan Environment Python & Whisper (Sistem User)
+Whisper berjalan secara lokal menggunakan Python. Junior programmer / AI harus memastikan prasyarat ini terinstal di komputer yang menjalankan bot.
 
-**What to add to the files:**
-```env
-# ─── Proxy Configuration ──────────────────────────────────────────────────────
-# Set to true to route browser traffic through a proxy
-USE_PROXY=false
+1. **Instalasi Whisper & FFmpeg:**
+   Programmer/User harus menginstal:
+   - Python 3.9 ke atas.
+   - FFmpeg (wajib untuk pemrosesan audio oleh Whisper). Di Windows: `choco install ffmpeg` atau unduh manual dan masukkan PATH.
+   - Install OpenAI Whisper via pip:
+     ```bash
+     pip install openai-whisper
+     ```
 
-# Proxy server URI (e.g. http://123.456.78.90:8000 or http://my-rotating-proxy.com:3128)
-PROXY_SERVER=
+2. **Membuat File `transcribe.py` di Root Project:**
+   Buat file `transcribe.py` yang akan dipanggil oleh Node.js. File ini menerima argumen berupa *path* file audio `.mp3` dan mencetak teksnya.
+   
+   **Isi `transcribe.py`:**
+   ```python
+   import sys
+   import whisper
+   import warnings
 
-# Authentication credentials (leave blank if your proxy uses IP-whitelist instead of password)
-PROXY_USERNAME=
-PROXY_PASSWORD=
-```
+   # Sembunyikan warning agar tidak mengotori stdout
+   warnings.filterwarnings("ignore")
+
+   def transcribe(audio_path):
+       try:
+           # Gunakan model 'tiny' atau 'base' agar cepat dan ringan di CPU lokal
+           model = whisper.load_model("tiny")
+           result = model.transcribe(audio_path, fp16=False)
+           print(result["text"].strip())
+       except Exception as e:
+           print(f"ERROR: {str(e)}", file=sys.stderr)
+           sys.exit(1)
+
+   if __name__ == "__main__":
+       if len(sys.argv) < 2:
+           print("ERROR: Path ke file audio tidak disertakan.", file=sys.stderr)
+           sys.exit(1)
+       transcribe(sys.argv[1])
+   ```
 
 ---
 
-### Step 2: Update Config Object Mapping
-Open [src/config/config.js](file:///d:/login_ppatk/src/config/config.js) and map the new environment variables so other services can access them cleanly.
+### Step 2: Membuat Utility Transcriber di Node.js (`src/utils/transcriber.js`)
 
-**Add under the scraper/captcha config section:**
+Modul ini bertanggung jawab memanggil `transcribe.py` dari Node.js secara asinkron.
+
+**Isi `src/utils/transcriber.js`:**
 ```javascript
-proxy: {
-  useProxy: process.env.USE_PROXY === 'true',
-  server: process.env.PROXY_SERVER || '',
-  username: process.env.PROXY_USERNAME || '',
-  password: process.env.PROXY_PASSWORD || '',
-}
-```
+'use strict';
 
----
+const { execFile } = require('child_process');
+const path = require('path');
+const logger = require('./logger');
 
-### Step 3: Inject Proxy Options into Playwright Browser Launch
-Open [src/services/browser.js](file:///d:/login_ppatk/src/services/browser.js) and update the `launchBrowser` function. 
-
-Playwright's `chromium.launch()` accepts a `proxy` option object containing `server`, `username`, and `password`.
-
-**Example Code Implementation:**
-1. Import `config` (it should already be imported at the top of `src/services/browser.js`).
-2. Inside `launchBrowser()`, before running `chromium.launch()`, build the configuration object dynamically:
-```javascript
-  const launchOptions = {
-    headless: isHeadless,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-    ],
-  };
-
-  // Check if proxy is enabled in configuration
-  if (config.proxy && config.proxy.useProxy) {
-    if (!config.proxy.server) {
-      logger.warn('[Browser] Proxy is enabled (USE_PROXY=true) but PROXY_SERVER is empty!');
-    } else {
-      logger.info(`[Browser] Launching with proxy server: ${config.proxy.server}`);
-      
-      const proxyConfig = {
-        server: config.proxy.server
-      };
-
-      // Add credentials if username is provided
-      if (config.proxy.username) {
-        proxyConfig.username = config.proxy.username;
-        proxyConfig.password = config.proxy.password;
+/**
+ * Mentranskripsi file audio MP3 secara lokal menggunakan Python Whisper
+ * @param {string} audioFilePath - Path absolut file mp3
+ * @returns {Promise<string>} Hasil transkripsi teks
+ */
+const transcribeAudioLocal = (audioFilePath) => {
+  return new Promise((resolve, reject) => {
+    const pythonScript = path.resolve(__dirname, '../../transcribe.py');
+    
+    logger.info(`[Transcriber] Menjalankan Whisper lokal pada: ${audioFilePath}`);
+    
+    // Panggil script python
+    execFile('python', [pythonScript, audioFilePath], (error, stdout, stderr) => {
+      if (error) {
+        logger.error(`[Transcriber] Gagal menjalankan Whisper: ${stderr || error.message}`);
+        return reject(new Error(`Whisper failed: ${stderr || error.message}`));
       }
+      
+      const transcription = stdout.trim();
+      logger.info(`[Transcriber] Hasil transkripsi: "${transcription}"`);
+      resolve(transcription);
+    });
+  });
+};
 
-      launchOptions.proxy = proxyConfig;
-    }
-  }
+module.exports = { transcribeAudioLocal };
 ```
-3. Pass `launchOptions` to the launch command:
-```javascript
-  const browser = await chromium.launch(launchOptions);
-```
+
+---
+
+### Step 3: Implementasi Flow Audio Solver di `src/services/scraper.js`
+
+Ini adalah bagian paling inti. Kita harus memodifikasi file `scraper.js` agar memiliki fungsi untuk menyelesaikan tantangan audio secara otomatis.
+
+1. **Import transcriber di bagian atas `scraper.js`:**
+   ```javascript
+   const { transcribeAudioLocal } = require('../utils/transcriber');
+   const axios = require('axios'); // Pastikan axios atau fetch terinstall untuk download file
+   ```
+   *(Catatan: Jika axios belum terinstall, bisa menggunakan built-in `https` Node.js atau install `axios` via npm)*.
+
+2. **Buat fungsi helper `solveAudioChallenge(page)`:**
+   Fungsi ini akan dieksekusi ketika terdeteksi reCAPTCHA ditantang (Challenge Frame muncul).
+   
+   **Logika Langkah demi Langkah di dalam `solveAudioChallenge`:**
+   *   **Langkah A:** Cari iframe tantangan (`bframe`). Iframe ini biasanya memiliki title yang mengandung kata "recaptcha challenge" atau src yang mengandung `"bframe"`.
+       ```javascript
+       const challengeFrameElement = await page.$('iframe[title*="recaptcha challenge"], iframe[src*="bframe"]');
+       const challengeFrame = await challengeFrameElement.contentFrame();
+       ```
+   *   **Langkah B:** Klik tombol audio (`button.rc-button-audio` atau `#recaptcha-audio-button`).
+       ```javascript
+       await challengeFrame.click('#recaptcha-audio-button');
+       // Berikan jeda waktu agar tantangan audio selesai dimuat
+       await page.waitForTimeout(2000); 
+       ```
+   *   **Langkah C:** Dapatkan URL download audio. Cari element tag `a` dengan class `.rc-audiochallenge-download-link` dan ambil attribute `href`.
+       ```javascript
+       const downloadLink = await challengeFrame.$eval('.rc-audiochallenge-download-link', el => el.href);
+       logger.info(`[Scraper] URL Audio didapatkan: ${downloadLink}`);
+       ```
+   *   **Langkah D:** Unduh file audio tersebut dan simpan sementara di lokal (misalnya di folder `temp/`).
+       ```javascript
+       const tempFolder = path.resolve(__dirname, '../../temp');
+       if (!fs.existsSync(tempFolder)) fs.mkdirSync(tempFolder);
+       const audioPath = path.join(tempFolder, `challenge_${Date.now()}.mp3`);
+       
+       // Download file via axios
+       const response = await axios({
+         method: 'GET',
+         url: downloadLink,
+         responseType: 'stream'
+       });
+       const writer = fs.createWriteStream(audioPath);
+       response.data.pipe(writer);
+       await new Promise((resolve, reject) => {
+         writer.on('finish', resolve);
+         writer.on('error', reject);
+       });
+       ```
+   *   **Langkah E:** Kirim path audio ke `transcribeAudioLocal(audioPath)` untuk mendapatkan transkripsi teks.
+       ```javascript
+       const textResponse = await transcribeAudioLocal(audioPath);
+       // Hapus file temp setelah selesai agar hemat ruang
+       fs.unlinkSync(audioPath);
+       ```
+   *   **Langkah F:** Masukkan hasil transkripsi ke elemen input `#audio-response`.
+       ```javascript
+       await challengeFrame.fill('#audio-response', textResponse);
+       ```
+   *   **Langkah G:** Klik tombol verify (`#recaptcha-verify-button`).
+       ```javascript
+       await challengeFrame.click('#recaptcha-verify-button');
+       await page.waitForTimeout(2000); // Tunggu proses verifikasi
+       ```
+
+3. **Integrasikan ke alur `performLogin`:**
+   Jika `CAPTCHA_STRATEGY=whisper-local`, setelah mengisi username dan password, kita klik checkbox reCAPTCHA seperti biasa. Lalu kita tunggu apakah iframe tantangan muncul. Jika muncul, panggil `solveAudioChallenge(page)`.
+   
+   **Contoh Integrasi:**
+   ```javascript
+   if (strategy === 'whisper-local') {
+     logger.info('[Login] Menjalankan reCAPTCHA solver berbasis Whisper Lokal...');
+     
+     // 1. Klik checkbox recaptcha
+     const recaptchaFrame = await page.frameLocator('iframe[title*="reCAPTCHA"]').first();
+     await recaptchaFrame.locator('.recaptcha-checkbox-border').click();
+     
+     // 2. Tunggu sebentar untuk melihat apakah langsung ter-checklist (hijau) atau ditantang
+     await page.waitForTimeout(2000);
+     
+     const isChecked = await recaptchaFrame.locator('#recaptcha-anchor[aria-checked="true"]').count();
+     if (isChecked > 0) {
+       logger.info('[Login] reCAPTCHA langsung lolos tanpa tantangan gambar/audio.');
+     } else {
+       // Ditantang! Selesaikan dengan Audio
+       logger.info('[Login] Ditantang oleh reCAPTCHA. Mulai memecahkan tantangan audio...');
+       await solveAudioChallenge(page);
+     }
+   }
+   ```
+
+---
+
+### Step 4: Daftarkan Strategi Baru di Browser & Config
+
+1. **Update `src/config/config.js`:**
+   Pastikan validasi strategi di config menerima nilai `whisper-local`.
+   ```javascript
+   // Tambahkan 'whisper-local' ke daftar strategy yang diperbolehkan
+   const validStrategies = ['stealth', 'manual', 'capsolver', '2captcha', 'whisper-local'];
+   ```
+
+2. **Update `src/services/browser.js`:**
+   Tambahkan opsi `whisper-local` di fungsi `applyStrategy`.
+   ```javascript
+   case 'whisper-local':
+     // Tidak membutuhkan registrasi plugin eksternal berbayar.
+     logger.info('[Browser] Strategy: WHISPER-LOCAL — Menggunakan audio challenge & model Whisper lokal.');
+     break;
+   ```
+
+3. **Update `.env.example` & `.env`:**
+   ```env
+   # Pilihan: stealth | manual | capsolver | 2captcha | whisper-local
+   CAPTCHA_STRATEGY=whisper-local
+   ```
 
 ---
 
 ## 🧪 Verification & Testing Plan
 
-### Test 1: Verify Proxy Injection Logs
-1. In `.env`, set `USE_PROXY=true` and `PROXY_SERVER=http://127.0.0.1:8080`.
-2. Start the server: `node server.js`.
-3. Call the API: `curl http://localhost:3000/api/v1/token` or trigger a scrape.
-4. Check the console/log files. You should see a log entry:
-   `[Browser] Launching with proxy server: http://127.0.0.1:8080`.
+1. **Uji Coba Script Python:**
+   Jalankan secara manual perintah transkripsi pada terminal menggunakan file suara tes MP3:
+   ```bash
+   python transcribe.py path/to/test.mp3
+   ```
+   Pastikan script berhasil memuat model `tiny` dan mengeluarkan teks hasil suara.
 
-### Test 2: Verify IP Rotation (Actual IP Check)
-To prove the proxy actually masks your real IP:
-1. Temporary change the target login URL in `.env` to:
-   `TARGET_URL=https://api.ipify.org?format=json` (an endpoint that returns the visiting client's IP address).
-2. Add a `console.log(await page.textContent('body'))` inside `attemptAutoScrape` in `src/services/scraper.js` after visiting the URL, to see what IP is being reported.
-3. Test 1 (Proxy OFF): Ensure the logged IP matches your computer's public IP.
-4. Test 2 (Proxy ON): Set up a working proxy. Ensure the logged IP matches the proxy's IP.
+2. **Uji Coba Integrasi End-to-End:**
+   - Set `.env` dengan `CAPTCHA_STRATEGY=whisper-local`.
+   - Jalankan `npm start`.
+   - Perhatikan logs bot. Pastikan ia berhasil mendeteksi iframe tantangan, mengklik ikon audio, mengunduh file `.mp3`, menjalankan Python Whisper secara lokal, mengisi teks ke input, dan mengklik tombol verify hingga login sukses.
 
 ---
 
 ## ✅ Definition of Done (DoD)
-- [ ] Environment variables for proxies are documented in `.env.example`.
-- [ ] Config loader in `src/config/config.js` validates or parses proxy settings safely.
-- [ ] `browser.js` successfully receives and configures proxy options dynamically when `USE_PROXY=true`.
-- [ ] Scraper gracefully skips proxy insertion if `USE_PROXY=false` or not defined.
-- [ ] No hardcoded proxy credentials exist in the source code files.
+
+- [ ] Script `transcribe.py` dibuat dan sukses mendeteksi/transkripsi suara.
+- [ ] Modul `transcriber.js` sukses memanggil subprocess python dan mengembalikan string teks.
+- [ ] Logika `solveAudioChallenge` di `scraper.js` sukses mencari iframe, menekan tombol audio, mengunduh file, mentranskripsi, mengisi, dan memverifikasi captcha.
+- [ ] Config dan file `.env` telah mendukung opsi `whisper-local`.
+- [ ] Aplikasi sukses melewati halaman login PPATK secara otomatis dan gratis menggunakan Whisper Lokal.

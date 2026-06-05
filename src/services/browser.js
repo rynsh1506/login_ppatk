@@ -15,10 +15,11 @@ const logger = require('../utils/logger');
  */
 const applyStrategy = (strategy) => {
   switch (strategy) {
-    case 'stealth': {
+    case 'stealth':
+    case 'whisper-local': {
       const StealthPlugin = require('puppeteer-extra-plugin-stealth');
       chromium.use(StealthPlugin());
-      logger.info('[Browser] Strategy: STEALTH — using stealth plugin (no API key needed).');
+      logger.info(`[Browser] Strategy: ${strategy.toUpperCase()} — using stealth plugin.`);
       break;
     }
 
@@ -46,10 +47,6 @@ const applyStrategy = (strategy) => {
     case 'manual':
       // No plugin needed — browser will run non-headless (see headless flag below)
       logger.info('[Browser] Strategy: MANUAL — browser will open visually for user interaction.');
-      break;
-
-    case 'whisper-local':
-      logger.info('[Browser] Strategy: WHISPER-LOCAL — Menggunakan audio challenge & model Whisper lokal.');
       break;
 
     default:

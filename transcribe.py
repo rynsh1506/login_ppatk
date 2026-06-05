@@ -1,6 +1,14 @@
 import sys
+import os
 import whisper
 import warnings
+
+# Jika dipanggil dari Node.js yang memiliki ffmpeg-static internal
+if len(sys.argv) > 2:
+    ffmpeg_binary_path = sys.argv[2]
+    ffmpeg_dir = os.path.dirname(ffmpeg_binary_path)
+    # Tambahkan direktori ffmpeg ke PATH Python
+    os.environ["PATH"] += os.pathsep + ffmpeg_dir
 
 # Sembunyikan warning agar tidak mengotori stdout
 warnings.filterwarnings("ignore")
