@@ -477,13 +477,13 @@ const attemptManualScrape = async (browser) => {
         document.body.style.setProperty('overflow', 'auto', 'important');
       });
 
-      await waitForUserInput();
+      logger.info('[Manual] Menunggu Anda menyelesaikan CAPTCHA dan klik Login secara manual (Batas Waktu: 5 Menit)...');
 
       // Tunggu sampai URL berubah dari halaman login
       await page.waitForURL((url) => !url.includes('/login'), {
-        timeout: config.scraper.timeoutMs,
+        timeout: 300000, // 5 menit
       }).catch(() => {
-        throw new Error('[Manual] Timeout menunggu redirect setelah login manual.');
+        throw new Error('[Manual] Timeout 5 menit menunggu redirect setelah login manual.');
       });
 
       await saveSession(context);
