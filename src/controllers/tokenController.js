@@ -1,6 +1,9 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { scrapeToken } = require('../services/scraper');
+const { getCsrfToken } = require('../services/searchService');
 const { sendSuccess, sendError } = require('../utils/responseHelper');
 const logger = require('../utils/logger');
 
@@ -26,4 +29,32 @@ const getToken = async (req, res) => {
   }
 };
 
-module.exports = { getToken };
+/**
+ * POST /api/v1/update-cache
+ * Endpoint manual untuk menerima cookieString dari browser luar dan menyimpannya ke cache.json
+ */
+const updateCache = async (req, res) => {
+  logger.info(`[TokenController] updateCache called | IP: ${req.ip}`);
+  const { cookieString } = req.body;
+
+  if (!cookieString) {
+    return sendError(res, 'cookieString is required in request body.', 400);
+  }
+
+  try {
+    logger.info('[TokenController] Mengekstrak CSRF token dari cookie yang diberikan...');
+    const csrfToken = await getCsrfToken(cookieString);
+
+    const CACHE_FILE = path.join(__dirname, '../../cache.json');
+    const cacheData = { cookieString, csrfToken };
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(cacheData, null, 2), 'utf8');
+
+    logger.info('[TokenController] cache.json berhasil diupdate dari injeksi manual.');
+    return sendSuccess(res, { message: 'Cache updated successfully', cache: cacheData });
+  } catch (err) {
+    logger.error(`[TokenController] Gagal ekstrak CSRF: ${err.message}`);
+    return sendError(res, `Gagal ekstrak CSRF token: ${err.message}`, 500);
+  }
+};
+
+module.exports = { getToken, updateCache };

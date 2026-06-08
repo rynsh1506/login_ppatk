@@ -1,7 +1,7 @@
 'use strict';
 
 const { Router } = require('express');
-const { getToken } = require('../controllers/tokenController');
+const { getToken, updateCache } = require('../controllers/tokenController');
 const { executeDirectSearch } = require('../controllers/searchController');
 
 const router = Router();
@@ -19,5 +19,12 @@ router.get('/token', getToken);
  * @access Public
  */
 router.post('/search', executeDirectSearch);
+
+/**
+ * @route  POST /api/v1/update-cache
+ * @desc   Mengupdate cache.json secara manual dengan cookie dari luar
+ * @access Public
+ */
+router.post('/update-cache', updateCache);
 
 module.exports = router;
