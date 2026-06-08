@@ -479,12 +479,22 @@ const attemptManualScrape = async (browser) => {
 
       logger.info('[Manual] Menunggu Anda menyelesaikan CAPTCHA dan klik Login secara manual (Batas Waktu: 5 Menit)...');
 
-      // Tunggu sampai URL berubah dari halaman login
-      await page.waitForURL((url) => !url.includes('/login'), {
-        timeout: 300000, // 5 menit
-      }).catch(() => {
-        throw new Error('[Manual] Timeout 5 menit menunggu redirect setelah login manual.');
-      });
+      // Polling URL setiap detik untuk mengecek apakah sudah pindah dari /login
+      let isLoggedIn = false;
+      for (let i = 0; i < 300; i++) {
+        if (!page.url().includes('/login')) {
+          isLoggedIn = true;
+          break;
+        }
+        await page.waitForTimeout(1000);
+      }
+
+      if (!isLoggedIn) {
+        throw new Error('[Manual] Timeout 5 menit menunggu login manual.');
+      }
+      
+      // Beri jeda 2 detik agar halaman dashboard termuat dan cookie tersimpan sempurna
+      await page.waitForTimeout(2000);
 
       await saveSession(context);
     } else {
