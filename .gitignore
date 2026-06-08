@@ -7,3 +7,6 @@ logs/
 test.http
 issue.md
 promt.txt
+cache.json
+session.json
+temp/
