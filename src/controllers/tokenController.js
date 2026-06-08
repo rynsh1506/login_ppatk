@@ -10,10 +10,11 @@ const logger = require('../utils/logger');
  */
 const getToken = async (req, res) => {
   const requestedStrategy = req.query.strategy;
-  logger.info(`[TokenController] getToken called | IP: ${req.ip} | Strategy Override: ${requestedStrategy || 'None'}`);
+  const requestedHeadless = req.query.headless;
+  logger.info(`[TokenController] getToken called | IP: ${req.ip} | Strategy: ${requestedStrategy || 'None'} | Headless: ${requestedHeadless !== undefined ? requestedHeadless : 'Default'}`);
 
   try {
-    const result = await scrapeToken(requestedStrategy);
+    const result = await scrapeToken(requestedStrategy, requestedHeadless);
     logger.info('[TokenController] Token dan cookies retrieved successfully.');
     return sendSuccess(res, { 
       token: result.token,
