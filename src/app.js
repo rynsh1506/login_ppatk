@@ -4,6 +4,7 @@ const express = require('express');
 const { requestLogger } = require('./middlewares/requestLogger');
 const { errorHandler } = require('./middlewares/errorHandler');
 const tokenRoutes = require('./routes/tokenRoutes');
+const settingRoutes = require('./routes/settingRoutes');
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(requestLogger);
 
 // ─── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/v1', tokenRoutes);
+app.use('/api/v1/settings', settingRoutes);
 
 // ─── Health Check ───────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
