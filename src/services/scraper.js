@@ -5,6 +5,7 @@ const path = require('path');
 const https = require('https');
 const { launchBrowser } = require('./browser');
 const config = require('../config/config');
+const { getSettings } = require('../utils/settingsManager');
 const logger = require('../utils/logger');
 const { transcribeAudioLocal } = require('../utils/transcriber');
 
@@ -167,7 +168,7 @@ const solveAudioChallenge = async (page) => {
  */
 const performLogin = async (page) => {
   const { loginEmail, loginPassword, targetUrl, timeoutMs } = config.scraper;
-  const strategy = config.captcha.strategy;
+  const strategy = getSettings().strategy;
 
   // Guard: credentials must be set
   if (!loginEmail || !loginPassword) {
@@ -389,9 +390,13 @@ const extractToken = async (context) => {
  * @returns {Promise<string>} The session token
  */
 const attemptAutoScrape = async (browser) => {
-  const strategy = config.captcha.strategy;
-  const envHeadless = process.env.HEADLESS?.toLowerCase();
-  const isHeadless = strategy !== 'manual' && envHeadless !== 'false';
+  const settings = getSettings();
+  const strategy = settings.strategy;
+  
+  let isHeadless = true;
+  if (strategy === 'manual') isHeadless = false;
+  else if (settings.headless !== undefined) isHeadless = Boolean(settings.headless);
+  else if (process.env.HEADLESS?.toLowerCase() === 'false') isHeadless = false;
 
   const contextOptions = {
     userAgent: DEFAULT_USER_AGENT,
@@ -424,9 +429,13 @@ const attemptAutoScrape = async (browser) => {
 const attemptManualScrape = async (browser) => {
   const savedCookies = loadSession();
   
-  const strategy = config.captcha.strategy;
-  const envHeadless = process.env.HEADLESS?.toLowerCase();
-  const isHeadless = strategy !== 'manual' && envHeadless !== 'false';
+  const settings = getSettings();
+  const strategy = settings.strategy;
+  
+  let isHeadless = true;
+  if (strategy === 'manual') isHeadless = false;
+  else if (settings.headless !== undefined) isHeadless = Boolean(settings.headless);
+  else if (process.env.HEADLESS?.toLowerCase() === 'false') isHeadless = false;
 
   const contextOptions = {
     userAgent: DEFAULT_USER_AGENT,
@@ -507,7 +516,7 @@ const attemptManualScrape = async (browser) => {
  */
 const scrapeToken = async () => {
   const { maxRetries, retryDelayMs } = config.scraper;
-  const strategy = config.captcha.strategy;
+  const strategy = getSettings().strategy;
   let browser = null;
 
   try {
