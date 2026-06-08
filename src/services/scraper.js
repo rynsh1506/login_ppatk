@@ -28,8 +28,11 @@ const SELECTORS = {
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
 
-
-
+/**
+ * Utility: sleep/delay helper.
+ * @param {number} ms - Milliseconds to wait
+ */
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // ─── Login Logic ───────────────────────────────────────────────────────────────
 
 const downloadAudio = (url, dest) => {
