@@ -19,6 +19,29 @@ const server = app.listen(PORT, () => {
   logger.info(`========================================`);
 });
 
+// ─── Keep-Alive Cron ─────────────────────────────────────────────────────────
+// Fitur otomatis untuk menjaga sesi cookie tetap hidup (tidak kedaluwarsa)
+// Sistem akan melakukan ping kecil ke web PPATK setiap 15 menit menggunakan cookie cache.
+const fs = require('fs');
+const path = require('path');
+const { getCsrfToken } = require('./src/services/searchService');
+
+setInterval(async () => {
+  try {
+    const CACHE_FILE = path.join(__dirname, 'cache.json');
+    if (fs.existsSync(CACHE_FILE)) {
+      const cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+      if (cache && cache.cookieString) {
+        logger.info('[Cron] 🕒 Mengirim ping Keep-Alive ke server PPATK untuk perpanjang masa aktif sesi...');
+        // Melakukan request GET sederhana untuk mereset timer kedaluwarsa di server PHP PPATK
+        await getCsrfToken(cache.cookieString);
+      }
+    }
+  } catch (err) {
+    logger.warn(`[Cron] ⚠️ Ping Keep-Alive gagal: ${err.message}`);
+  }
+}, 15 * 60 * 1000); // Jalan setiap 15 Menit
+
 // ─── Graceful Shutdown ─────────────────────────────────────────────────────────
 const shutdown = (signal) => {
   logger.warn(`[Server] Received ${signal}. Shutting down gracefully...`);
