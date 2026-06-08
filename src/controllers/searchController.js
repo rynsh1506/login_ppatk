@@ -59,9 +59,13 @@ const executeDirectSearch = async (req, res) => {
         logger.info('[SearchController] Cache Cookie kosong/rusak. Menjalankan bot (Playwright) untuk Login...');
         const loginResult = await scrapeToken();
         cookieCache = loginResult.cookieString;
-        
-        logger.info('[SearchController] Mengekstrak CSRF Token perdana...');
-        csrfCache = await getCsrfToken(cookieCache);
+        csrfCache = loginResult.csrfToken;
+
+        // Jika Playwright gagal mengekstrak CSRF Token dari halaman, baru fallback ke Axios
+        if (!csrfCache) {
+          logger.info('[SearchController] Fallback: Mengekstrak CSRF Token via HTTP GET...');
+          csrfCache = await getCsrfToken(cookieCache);
+        }
 
         // Simpan ke file
         saveCache(cookieCache, csrfCache);
@@ -92,7 +96,10 @@ const executeDirectSearch = async (req, res) => {
         logger.info('[SearchController] Re-Login otomatis via Playwright...');
         const loginResult = await scrapeToken();
         cookieCache = loginResult.cookieString;
-        csrfCache = await getCsrfToken(cookieCache);
+        csrfCache = loginResult.csrfToken;
+        if (!csrfCache) {
+          csrfCache = await getCsrfToken(cookieCache);
+        }
         
         saveCache(cookieCache, csrfCache);
       } finally {
