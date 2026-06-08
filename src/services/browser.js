@@ -64,15 +64,22 @@ const applyStrategy = (strategy) => {
  *
  * @returns {Promise<import('playwright').Browser>} A ready-to-use browser instance
  */
-const launchBrowser = async () => {
-  const strategy = config.captcha.strategy;
+const launchBrowser = async (overrideStrategy, overrideHeadless) => {
+  const strategy = overrideStrategy || config.captcha.strategy;
 
   applyStrategy(strategy);
 
-  // Manual strategy harus non-headless; strategi lain bisa dipaksa non-headless
-  // via env HEADLESS=false (berguna untuk debug / observasi stealth mode)
-  const envHeadless = process.env.HEADLESS?.toLowerCase();
-  const isHeadless = strategy !== 'manual' && envHeadless !== 'false';
+  let isHeadless;
+  if (overrideHeadless !== undefined && overrideHeadless !== null) {
+    // Convert string "false"/"true" to boolean if from query param
+    isHeadless = String(overrideHeadless).toLowerCase() === 'false' ? false : true;
+    if (strategy === 'manual') isHeadless = false; // manual must always be non-headless
+  } else {
+    // Manual strategy harus non-headless; strategi lain bisa dipaksa non-headless
+    // via env HEADLESS=false (berguna untuk debug / observasi stealth mode)
+    const envHeadless = process.env.HEADLESS?.toLowerCase();
+    isHeadless = strategy !== 'manual' && envHeadless !== 'false';
+  }
 
   logger.info(`[Browser] Launching ${isHeadless ? 'headless' : 'non-headless'} Chromium...`);
 

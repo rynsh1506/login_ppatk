@@ -403,9 +403,15 @@ const extractToken = async (context, page) => {
  * @param {import('playwright').Browser} browser
  * @returns {Promise<string>} The session token
  */
-const attemptAutoScrape = async (browser, strategy) => {
-  const envHeadless = process.env.HEADLESS?.toLowerCase();
-  const isHeadless = strategy !== "manual" && envHeadless !== "false";
+const attemptAutoScrape = async (browser, strategy, overrideHeadless) => {
+  let isHeadless;
+  if (overrideHeadless !== undefined && overrideHeadless !== null) {
+    isHeadless = String(overrideHeadless).toLowerCase() === 'false' ? false : true;
+    if (strategy === 'manual') isHeadless = false;
+  } else {
+    const envHeadless = process.env.HEADLESS?.toLowerCase();
+    isHeadless = strategy !== "manual" && envHeadless !== "false";
+  }
 
   const contextOptions = {
     userAgent: DEFAULT_USER_AGENT,
@@ -437,9 +443,15 @@ const attemptAutoScrape = async (browser, strategy) => {
  * @param {import('playwright').Browser} browser
  * @returns {Promise<string>} The session token
  */
-const attemptManualScrape = async (browser, strategy) => {
-  const envHeadless = process.env.HEADLESS?.toLowerCase();
-  const isHeadless = strategy !== "manual" && envHeadless !== "false";
+const attemptManualScrape = async (browser, strategy, overrideHeadless) => {
+  let isHeadless;
+  if (overrideHeadless !== undefined && overrideHeadless !== null) {
+    isHeadless = String(overrideHeadless).toLowerCase() === 'false' ? false : true;
+    if (strategy === 'manual') isHeadless = false;
+  } else {
+    const envHeadless = process.env.HEADLESS?.toLowerCase();
+    isHeadless = strategy !== "manual" && envHeadless !== "false";
+  }
 
   const contextOptions = {
     userAgent: DEFAULT_USER_AGENT,
@@ -515,13 +527,13 @@ const attemptManualScrape = async (browser, strategy) => {
  *
  * @returns {Promise<{token: string, cookies: object[]}>} Objek hasil ekstraksi
  */
-const scrapeToken = async (overrideStrategy) => {
+const scrapeToken = async (overrideStrategy, overrideHeadless) => {
   const { maxRetries, retryDelayMs } = config.scraper;
   const strategy = overrideStrategy || config.captcha.strategy;
   let browser = null;
 
   try {
-    browser = await launchBrowser();
+    browser = await launchBrowser(strategy, overrideHeadless);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       logger.info(
@@ -530,8 +542,8 @@ const scrapeToken = async (overrideStrategy) => {
       try {
         const token =
           strategy === "manual"
-            ? await attemptManualScrape(browser, strategy)
-            : await attemptAutoScrape(browser, strategy);
+            ? await attemptManualScrape(browser, strategy, overrideHeadless)
+            : await attemptAutoScrape(browser, strategy, overrideHeadless);
         return token;
       } catch (err) {
         logger.warn(`[Scraper] Attempt ${attempt} failed: ${err.message}`);

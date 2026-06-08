@@ -41,7 +41,8 @@ let isScraping = false;
  */
 const executeDirectSearch = async (req, res) => {
   const requestedStrategy = req.body.strategy;
-  logger.info(`[SearchController] executeDirectSearch dipanggil | IP: ${req.ip} | Strategy Override: ${requestedStrategy || 'None'}`);
+  const requestedHeadless = req.body.headless;
+  logger.info(`[SearchController] executeDirectSearch dipanggil | IP: ${req.ip} | Strategy: ${requestedStrategy || 'None'} | Headless: ${requestedHeadless !== undefined ? requestedHeadless : 'Default'}`);
   
   try {
     // 1. Baca cache dari file
@@ -58,7 +59,7 @@ const executeDirectSearch = async (req, res) => {
       isScraping = true;
       try {
         logger.info('[SearchController] Cache Cookie kosong/rusak. Menjalankan bot (Playwright) untuk Login...');
-        const loginResult = await scrapeToken(requestedStrategy);
+        const loginResult = await scrapeToken(requestedStrategy, requestedHeadless);
         cookieCache = loginResult.cookieString;
         csrfCache = loginResult.csrfToken;
 
@@ -95,7 +96,7 @@ const executeDirectSearch = async (req, res) => {
       try {
         // Jalankan ulang bot login sekali lagi
         logger.info('[SearchController] Re-Login otomatis via Playwright...');
-        const loginResult = await scrapeToken(requestedStrategy);
+        const loginResult = await scrapeToken(requestedStrategy, requestedHeadless);
         cookieCache = loginResult.cookieString;
         csrfCache = loginResult.csrfToken;
         if (!csrfCache) {
