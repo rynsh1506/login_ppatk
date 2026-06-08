@@ -40,7 +40,8 @@ let isScraping = false;
  * Menggunakan Axios untuk mencari data dengan memanfaatkan Cookie Cache dari file cache.json.
  */
 const executeDirectSearch = async (req, res) => {
-  logger.info(`[SearchController] executeDirectSearch dipanggil | IP: ${req.ip}`);
+  const requestedStrategy = req.body.strategy;
+  logger.info(`[SearchController] executeDirectSearch dipanggil | IP: ${req.ip} | Strategy Override: ${requestedStrategy || 'None'}`);
   
   try {
     // 1. Baca cache dari file
@@ -57,7 +58,7 @@ const executeDirectSearch = async (req, res) => {
       isScraping = true;
       try {
         logger.info('[SearchController] Cache Cookie kosong/rusak. Menjalankan bot (Playwright) untuk Login...');
-        const loginResult = await scrapeToken();
+        const loginResult = await scrapeToken(requestedStrategy);
         cookieCache = loginResult.cookieString;
         csrfCache = loginResult.csrfToken;
 
@@ -94,7 +95,7 @@ const executeDirectSearch = async (req, res) => {
       try {
         // Jalankan ulang bot login sekali lagi
         logger.info('[SearchController] Re-Login otomatis via Playwright...');
-        const loginResult = await scrapeToken();
+        const loginResult = await scrapeToken(requestedStrategy);
         cookieCache = loginResult.cookieString;
         csrfCache = loginResult.csrfToken;
         if (!csrfCache) {

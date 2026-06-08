@@ -9,10 +9,11 @@ const logger = require('../utils/logger');
  * Triggers a headless Playwright session to scrape and return a PPATK token.
  */
 const getToken = async (req, res) => {
-  logger.info(`[TokenController] getToken called | IP: ${req.ip}`);
+  const requestedStrategy = req.query.strategy;
+  logger.info(`[TokenController] getToken called | IP: ${req.ip} | Strategy Override: ${requestedStrategy || 'None'}`);
 
   try {
-    const result = await scrapeToken();
+    const result = await scrapeToken(requestedStrategy);
     logger.info('[TokenController] Token dan cookies retrieved successfully.');
     return sendSuccess(res, { 
       token: result.token,

@@ -136,9 +136,8 @@ const solveAudioChallenge = async (page) => {
  *
  * @param {import('playwright').Page} page
  */
-const performLogin = async (page) => {
+const performLogin = async (page, strategy) => {
   const { loginEmail, loginPassword, targetUrl, timeoutMs } = config.scraper;
-  const strategy = config.captcha.strategy;
 
   // Guard: credentials must be set
   if (!loginEmail || !loginPassword) {
@@ -404,8 +403,7 @@ const extractToken = async (context, page) => {
  * @param {import('playwright').Browser} browser
  * @returns {Promise<string>} The session token
  */
-const attemptAutoScrape = async (browser) => {
-  const strategy = config.captcha.strategy;
+const attemptAutoScrape = async (browser, strategy) => {
   const envHeadless = process.env.HEADLESS?.toLowerCase();
   const isHeadless = strategy !== "manual" && envHeadless !== "false";
 
@@ -421,7 +419,7 @@ const attemptAutoScrape = async (browser) => {
   const page = await context.newPage();
 
   try {
-    await performLogin(page);
+    await performLogin(page, strategy);
     return await extractToken(context, page);
   } finally {
     await context
@@ -439,8 +437,7 @@ const attemptAutoScrape = async (browser) => {
  * @param {import('playwright').Browser} browser
  * @returns {Promise<string>} The session token
  */
-const attemptManualScrape = async (browser) => {
-  const strategy = config.captcha.strategy;
+const attemptManualScrape = async (browser, strategy) => {
   const envHeadless = process.env.HEADLESS?.toLowerCase();
   const isHeadless = strategy !== "manual" && envHeadless !== "false";
 
@@ -518,9 +515,9 @@ const attemptManualScrape = async (browser) => {
  *
  * @returns {Promise<{token: string, cookies: object[]}>} Objek hasil ekstraksi
  */
-const scrapeToken = async () => {
+const scrapeToken = async (overrideStrategy) => {
   const { maxRetries, retryDelayMs } = config.scraper;
-  const strategy = config.captcha.strategy;
+  const strategy = overrideStrategy || config.captcha.strategy;
   let browser = null;
 
   try {
@@ -533,8 +530,8 @@ const scrapeToken = async () => {
       try {
         const token =
           strategy === "manual"
-            ? await attemptManualScrape(browser)
-            : await attemptAutoScrape(browser);
+            ? await attemptManualScrape(browser, strategy)
+            : await attemptAutoScrape(browser, strategy);
         return token;
       } catch (err) {
         logger.warn(`[Scraper] Attempt ${attempt} failed: ${err.message}`);
