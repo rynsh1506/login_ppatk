@@ -26,6 +26,8 @@ const SELECTORS = {
   sessionCookieName: "_identity-backend", // TODO: verify this after first manual login
 };
 
+const SESSION_FILE = path.resolve(config.scraper.sessionFile || 'session.json');
+
 // ─── Utility ─────────────────────────────────────────────────────────────────
 
 /**
@@ -457,6 +459,11 @@ const attemptManualScrape = async (browser, strategy, overrideHeadless) => {
     userAgent: DEFAULT_USER_AGENT,
   };
 
+  if (fs.existsSync(SESSION_FILE)) {
+    contextOptions.storageState = SESSION_FILE;
+    logger.info(`[Scraper] Memuat session manual dari ${SESSION_FILE}`);
+  }
+
   if (!isHeadless) {
     contextOptions.viewport = null;
   }
@@ -504,6 +511,9 @@ const attemptManualScrape = async (browser, strategy, overrideHeadless) => {
       }).catch(() => {
         throw new Error('[Manual] Timeout menunggu login manual (lebih dari 5 menit).');
       });
+
+      await context.storageState({ path: SESSION_FILE });
+      logger.info(`[Scraper] Sesi manual berhasil disimpan ke ${SESSION_FILE}`);
 
       } // Tutup blok if (isOnLoginPage)
 

@@ -22,10 +22,11 @@ const config = {
   scraper: {
     targetUrl: process.env.TARGET_URL || 'https://pep.ppatk.go.id/admin/user/login',
     timeoutMs: parseInt(process.env.SCRAPER_TIMEOUT) || 30000,
-    maxRetries: parseInt(process.env.SCRAPER_MAX_RETRIES) || 3,
+    maxRetries: parseInt(process.env.SCRAPER_MAX_RETRIES) || 1,
     retryDelayMs: parseInt(process.env.SCRAPER_RETRY_DELAY) || 5000,
     loginEmail: process.env.LOGIN_EMAIL || '',
     loginPassword: process.env.LOGIN_PASSWORD || '',
+    sessionFile: process.env.SESSION_FILE || 'session.json',
   },
 
   // ==============================================================================
