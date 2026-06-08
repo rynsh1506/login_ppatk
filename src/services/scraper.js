@@ -520,24 +520,31 @@ const attemptManualScrape = async (browser) => {
  */
 const scrapeToken = async () => {
   const { maxRetries, retryDelayMs } = config.scraper;
-  const strategy = config.captcha.strategy;
   let browser = null;
 
   try {
     browser = await launchBrowser();
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const currentStrategy = config.captcha.strategy;
       logger.info(
-        `[Scraper] Attempt ${attempt}/${maxRetries} (strategy: ${strategy})...`,
+        `[Scraper] Attempt ${attempt}/${maxRetries} (strategy: ${currentStrategy})...`,
       );
       try {
         const token =
-          strategy === "manual"
+          currentStrategy === "manual"
             ? await attemptManualScrape(browser)
             : await attemptAutoScrape(browser);
         return token;
       } catch (err) {
         logger.warn(`[Scraper] Attempt ${attempt} failed: ${err.message}`);
+        
+        // Auto-fallback to manual if audio challenge is blocked
+        if (err.message.includes("Audio Challenge") || err.message.includes("AudioChallenge")) {
+          logger.warn("[Scraper] Audio Challenge terblokir/gagal. Mengubah strategy ke 'manual' secara sementara untuk memulihkan reputasi IP...");
+          config.captcha.strategy = "manual";
+        }
+
         if (attempt < maxRetries) {
           logger.info(`[Scraper] Retrying in ${retryDelayMs}ms...`);
           await sleep(retryDelayMs);
