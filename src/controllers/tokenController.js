@@ -35,15 +35,19 @@ const getToken = async (req, res) => {
  */
 const updateCache = async (req, res) => {
   logger.info(`[TokenController] updateCache called | IP: ${req.ip}`);
-  const { cookieString } = req.body;
+  let { cookieString, csrfToken } = req.body;
 
   if (!cookieString) {
     return sendError(res, 'cookieString is required in request body.', 400);
   }
 
   try {
-    logger.info('[TokenController] Mengekstrak CSRF token dari cookie yang diberikan...');
-    const csrfToken = await getCsrfToken(cookieString);
+    if (!csrfToken) {
+      logger.info('[TokenController] Mengekstrak CSRF token dari cookie yang diberikan...');
+      csrfToken = await getCsrfToken(cookieString);
+    } else {
+      logger.info('[TokenController] Menggunakan CSRF token yang diberikan oleh user.');
+    }
 
     const CACHE_FILE = path.join(__dirname, '../../cache.json');
     const cacheData = { cookieString, csrfToken };
