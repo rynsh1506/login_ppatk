@@ -35,34 +35,10 @@ const getToken = async (req, res) => {
  */
 const updateCache = async (req, res) => {
   logger.info(`[TokenController] updateCache called | IP: ${req.ip}`);
-  let { cookieString, rawCookies } = req.body;
-
-  // Jika user mengirimkan copas mentah dari DevTools (Tab separated values)
-  if (rawCookies && !cookieString) {
-    try {
-      const parsedCookies = rawCookies
-        .trim()
-        .split('\n')
-        .map(line => {
-          const parts = line.split('\t');
-          if (parts.length >= 2) {
-            return `${parts[0].trim()}=${parts[1].trim()}`;
-          }
-          return null;
-        })
-        .filter(Boolean);
-
-      if (parsedCookies.length > 0) {
-        cookieString = parsedCookies.join('; ');
-        logger.info('[TokenController] Berhasil melakukan parsing rawCookies dari DevTools.');
-      }
-    } catch (e) {
-      logger.warn('[TokenController] Gagal parse rawCookies.');
-    }
-  }
+  const { cookieString } = req.body;
 
   if (!cookieString) {
-    return sendError(res, 'cookieString atau rawCookies is required in request body.', 400);
+    return sendError(res, 'cookieString is required in request body.', 400);
   }
 
   try {
