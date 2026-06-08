@@ -32,6 +32,10 @@ const SESSION_FILE = path.resolve(config.scraper.sessionFile);
  * @param {number} ms - Milliseconds to wait
  */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 
 // ─── Session Helpers ───────────────────────────────────────────────────────────
 
