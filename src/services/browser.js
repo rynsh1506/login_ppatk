@@ -2,6 +2,7 @@
 
 const { chromium } = require('playwright-extra');
 const config = require('../config/config');
+const { getSettings } = require('../utils/settingsManager');
 const logger = require('../utils/logger');
 
 /**
@@ -65,14 +66,24 @@ const applyStrategy = (strategy) => {
  * @returns {Promise<import('playwright').Browser>} A ready-to-use browser instance
  */
 const launchBrowser = async () => {
-  const strategy = config.captcha.strategy;
+  const settings = getSettings();
+  const strategy = settings.strategy;
 
   applyStrategy(strategy);
 
   // Manual strategy harus non-headless; strategi lain bisa dipaksa non-headless
-  // via env HEADLESS=false (berguna untuk debug / observasi stealth mode)
+  // via env HEADLESS=false (berguna untuk debug / observasi stealth mode),
+  // atau via settings API (settings.headless).
   const envHeadless = process.env.HEADLESS?.toLowerCase();
-  const isHeadless = strategy !== 'manual' && envHeadless !== 'false';
+  
+  let isHeadless = true;
+  if (strategy === 'manual') {
+    isHeadless = false;
+  } else if (settings.headless !== undefined) {
+    isHeadless = Boolean(settings.headless);
+  } else if (envHeadless === 'false') {
+    isHeadless = false;
+  }
 
   logger.info(`[Browser] Launching ${isHeadless ? 'headless' : 'non-headless'} Chromium...`);
 
