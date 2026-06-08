@@ -16,6 +16,7 @@ const getToken = async (req, res) => {
     logger.info('[TokenController] Token dan cookies retrieved successfully.');
     return sendSuccess(res, { 
       token: result.token,
+      csrfToken: result.csrfToken,
       cookieDict: result.cookieDict,
       cookieString: result.cookieString,
       rawCookies: result.rawCookies 

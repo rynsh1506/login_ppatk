@@ -26,59 +26,9 @@ const SELECTORS = {
   sessionCookieName: "_identity-backend", // TODO: verify this after first manual login
 };
 
-const SESSION_FILE = path.resolve(config.scraper.sessionFile);
+// ─── Utility ─────────────────────────────────────────────────────────────────
 
-/**
- * Utility: sleep/delay helper.
- * @param {number} ms - Milliseconds to wait
- */
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// ─── Session Helpers ───────────────────────────────────────────────────────────
-
-/**
- * Loads saved session cookies from disk.
- * Returns null if no session file exists yet.
- *
- * @returns {Array|null} Array of cookie objects, or null if not found
- */
-const loadSession = () => {
-  if (fs.existsSync(SESSION_FILE)) {
-    logger.info(`[Scraper] Loading saved session from: ${SESSION_FILE}`);
-    return JSON.parse(fs.readFileSync(SESSION_FILE, "utf8"));
-  }
-  return null;
-};
-
-/**
- * Saves current browser cookies to disk for future re-use.
- *
- * @param {import('playwright').BrowserContext} context
- */
-const saveSession = async (context) => {
-  const cookies = await context.cookies();
-  fs.writeFileSync(SESSION_FILE, JSON.stringify(cookies, null, 2), "utf8");
-  logger.info(`[Scraper] Session saved to: ${SESSION_FILE}`);
-};
-
-/**
- * Waits for the user to press Enter in the terminal.
- * Used in 'manual' strategy to pause while user solves the CAPTCHA.
- */
-const waitForUserInput = () => {
-  return new Promise((resolve) => {
-    logger.info("─────────────────────────────────────────────────────");
-    logger.info("[MANUAL MODE] Selesaikan CAPTCHA di browser yang terbuka.");
-    logger.info("[MANUAL MODE] Tekan ENTER di sini setelah selesai login...");
-    logger.info("─────────────────────────────────────────────────────");
-    process.stdin.resume();
-    process.stdin.setEncoding("utf8");
-    process.stdin.once("data", () => {
-      process.stdin.pause();
-      resolve();
-    });
-  });
-};
 
 // ─── Login Logic ───────────────────────────────────────────────────────────────
 
@@ -379,12 +329,13 @@ const performLogin = async (page) => {
 
 /**
  * Extracts the session token from browser cookies after a successful login.
- * Logs all available cookie names if the expected cookie is not found.
+ * It also extracts the CSRF Token directly from the current page DOM.
  *
  * @param {import('playwright').BrowserContext} context
- * @returns {Promise<{token: string, cookies: object[]}>} Objek berisi token utama dan daftar semua cookies
+ * @param {import('playwright').Page} page
+ * @returns {Promise<{token: string, csrfToken: string, cookies: object[]}>} Objek berisi token utama, csrfToken dan daftar semua cookies
  */
-const extractToken = async (context) => {
+const extractToken = async (context, page) => {
   const cookies = await context.cookies();
 
   let sessionCookie = cookies.find(
@@ -412,6 +363,17 @@ const extractToken = async (context) => {
     );
   }
 
+  // Ambil CSRF token langsung dari DOM HTML (hemat 1 request Axios!)
+  let csrfToken = '';
+  try {
+    csrfToken = await page.$eval('meta[name="csrf-token"]', el => el.content);
+    if (csrfToken) {
+      logger.info(`[Scraper] ⚡ CSRF Token berhasil disedot instan dari DOM: ${csrfToken.substring(0, 15)}...`);
+    }
+  } catch (err) {
+    logger.warn('[Scraper] Gagal menyedot CSRF Token dari halaman saat ini, akan dilewati.');
+  }
+
   // Merapikan format cookies agar gampang dikonsumsi klien API
   const cookieDict = {};
   const cookieStringParts = [];
@@ -421,11 +383,12 @@ const extractToken = async (context) => {
   });
   const cookieString = cookieStringParts.join("; ");
 
-  return {
+  return { 
     token,
-    rawCookies: cookies,
-    cookieDict,
-    cookieString,
+    csrfToken,
+    rawCookies: cookies, 
+    cookieDict, 
+    cookieString 
   };
 };
 
@@ -456,7 +419,7 @@ const attemptAutoScrape = async (browser) => {
 
   try {
     await performLogin(page);
-    return await extractToken(context);
+    return await extractToken(context, page);
   } finally {
     await context
       .close()
@@ -474,8 +437,6 @@ const attemptAutoScrape = async (browser) => {
  * @returns {Promise<string>} The session token
  */
 const attemptManualScrape = async (browser) => {
-  const savedCookies = loadSession();
-
   const strategy = config.captcha.strategy;
   const envHeadless = process.env.HEADLESS?.toLowerCase();
   const isHeadless = strategy !== "manual" && envHeadless !== "false";
@@ -489,14 +450,6 @@ const attemptManualScrape = async (browser) => {
   }
 
   const context = await browser.newContext(contextOptions);
-
-  if (savedCookies) {
-    await context.addCookies(savedCookies);
-    logger.info(
-      "[Scraper] Session cookies dari file berhasil di-inject. Mencoba skip login...",
-    );
-  }
-
   const page = await context.newPage();
 
   try {
@@ -528,38 +481,25 @@ const attemptManualScrape = async (browser) => {
         document.body.style.setProperty("overflow", "auto", "important");
       });
 
-      await waitForUserInput();
+      logger.info('─────────────────────────────────────────────────────');
+      logger.info('[MANUAL MODE] Silakan selesaikan CAPTCHA dan klik Login di browser.');
+      logger.info('[MANUAL MODE] Sistem mendeteksi otomatis saat Anda berhasil masuk...');
+      logger.info('─────────────────────────────────────────────────────');
 
-      // Tunggu sampai URL berubah dari halaman login
-      await page
-        .waitForURL((url) => !url.includes("/login"), {
-          timeout: config.scraper.timeoutMs,
-        })
-        .catch(() => {
-          throw new Error(
-            "[Manual] Timeout menunggu redirect setelah login manual.",
-          );
-        });
+      // Tunggu sampai URL berubah dari halaman login secara otomatis (Tunggu max 5 menit)
+      await page.waitForURL((url) => !url.href.includes('/login'), {
+        timeout: 5 * 60 * 1000,
+      }).catch(() => {
+        throw new Error('[Manual] Timeout menunggu login manual (lebih dari 5 menit).');
+      });
 
-      await saveSession(context);
-    } else {
-      logger.info("[Scraper] Session masih valid, langsung ambil token.");
-    }
+      } // Tutup blok if (isOnLoginPage)
 
-    // Extract token
-    const token = await extractToken(context);
-    return token;
+      // Extract token
+      const token = await extractToken(context, page);
+      return token;
+
   } catch (err) {
-    // Hapus session file yang stale jika token tidak ditemukan
-    if (
-      err.message.includes("Token tidak ditemukan") &&
-      fs.existsSync(SESSION_FILE)
-    ) {
-      fs.unlinkSync(SESSION_FILE);
-      logger.warn(
-        "[Scraper] Session stale dihapus. Request berikutnya akan login ulang.",
-      );
-    }
     throw err;
   } finally {
     await context
