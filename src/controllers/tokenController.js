@@ -17,6 +17,13 @@ const getToken = async (req, res) => {
   try {
     const result = await scrapeToken();
     logger.info('[TokenController] Token dan cookies retrieved successfully.');
+
+    // Save to cache automatically so search API can use it
+    const CACHE_FILE = path.join(__dirname, '../../cache.json');
+    const csrfToken = await getCsrfToken(result.cookieString);
+    fs.writeFileSync(CACHE_FILE, JSON.stringify({ cookieString: result.cookieString, csrfToken }, null, 2), 'utf8');
+    logger.info('[TokenController] Token and CSRF saved to cache.json');
+
     return sendSuccess(res, { 
       token: result.token,
       cookieDict: result.cookieDict,

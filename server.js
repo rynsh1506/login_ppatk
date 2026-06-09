@@ -34,7 +34,12 @@ setInterval(async () => {
       if (cache && cache.cookieString) {
         logger.info('[Cron] 🕒 Mengirim ping Keep-Alive ke server PPATK untuk perpanjang masa aktif sesi...');
         // Melakukan request GET sederhana untuk mereset timer kedaluwarsa di server PHP PPATK
-        await getCsrfToken(cache.cookieString);
+        const newCsrf = await getCsrfToken(cache.cookieString);
+        if (newCsrf) {
+          cache.csrfToken = newCsrf;
+          fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf8');
+          logger.info('[Cron] ✅ CSRF Token berhasil di-refresh dan disimpan ke cache.');
+        }
       }
     }
   } catch (err) {
