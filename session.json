@@ -1,0 +1,42 @@
+[
+  {
+    "name": "_GRECAPTCHA",
+    "value": "09AKhCRwjP_ko1WQX5o8q8Q4oZCFzXbFeUjBi5q9jbiygdfeivV9RL66kzGw9OkHmPZYgfj6fRjV6iVYbOqHZr6XE",
+    "domain": "www.google.com",
+    "path": "/recaptcha",
+    "expires": 1796453630.540708,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_csrf_backend",
+    "value": "a407efb57771d3fa55eee7a28e88b6a49eb545dc4ba1a72109436016089ca00ea%3A2%3A%7Bi%3A0%3Bs%3A13%3A%22_csrf_backend%22%3Bi%3A1%3Bs%3A32%3A%22CdUC0jeHl-3CbO15bUNlV4tk7AUbyirt%22%3B%7D",
+    "domain": "pep.ppatk.go.id",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "cookiesession1",
+    "value": "678B28904540B6F25E8956DFB9BFB631",
+    "domain": "pep.ppatk.go.id",
+    "path": "/",
+    "expires": 1812425633.885209,
+    "httpOnly": true,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "PHPSESSID",
+    "value": "130637a5010b6e148b32fe5433ddffae",
+    "domain": "pep.ppatk.go.id",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": false,
+    "sameSite": "Lax"
+  }
+]

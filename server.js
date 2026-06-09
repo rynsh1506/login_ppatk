@@ -40,7 +40,7 @@ setInterval(async () => {
   } catch (err) {
     logger.warn(`[Cron] ⚠️ Ping Keep-Alive gagal: ${err.message}`);
   }
-}, 15 * 60 * 1000); // Jalan setiap 15 Menit
+}, 5 * 60 * 1000); // Jalan setiap 5 Menit
 
 // ─── Graceful Shutdown ─────────────────────────────────────────────────────────
 const shutdown = (signal) => {

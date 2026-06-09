@@ -1,0 +1,4 @@
+{
+  "strategy": "whisper-local",
+  "headless": false
+}  

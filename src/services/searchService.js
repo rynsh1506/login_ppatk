@@ -17,9 +17,19 @@ const getCsrfToken = async (cookieString) => {
   logger.info('[SearchService] Melakukan request GET untuk mengambil token _csrf_backend...');
   
   const headers = {
-    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'accept-encoding': 'gzip, deflate, br, zstd',
+    'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7,la;q=0.6',
+    'cache-control': 'max-age=0',
+    'connection': 'keep-alive',
     'cookie': cookieString,
+    'sec-ch-ua': '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-dest': 'document',
+    'sec-fetch-mode': 'navigate',
+    'sec-fetch-user': '?1',
+    'upgrade-insecure-requests': '1',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36'
   };
 
@@ -31,7 +41,14 @@ const getCsrfToken = async (cookieString) => {
     const csrfToken = $('meta[name="csrf-token"]').attr('content');
     
     if (!csrfToken) {
-      logger.warn('[SearchService] Peringatan: csrf-token tidak ditemukan di tag meta HTML.');
+      const pageTitle = $('title').text().trim();
+      logger.warn(`[SearchService] Peringatan: csrf-token tidak ditemukan di tag meta HTML. Page Title: "${pageTitle}"`);
+      // Simpan HTML ke file untuk debugging
+      const fs = require('fs');
+      const path = require('path');
+      const tempPath = path.join(__dirname, '../../temp_error_page.html');
+      fs.writeFileSync(tempPath, response.data);
+      logger.info(`[SearchService] HTML halaman error telah disimpan di ${tempPath} untuk investigasi.`);
     } else {
       logger.info('[SearchService] CSRF Token berhasil diekstrak.');
     }
