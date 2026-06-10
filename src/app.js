@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const cors = require('cors');
 const { requestLogger } = require('./middlewares/requestLogger');
 const { errorHandler } = require('./middlewares/errorHandler');
 const tokenRoutes = require('./routes/tokenRoutes');
@@ -9,6 +10,7 @@ const settingRoutes = require('./routes/settingRoutes');
 const app = express();
 
 // ─── Core Middlewares ───────────────────────────────────────────────────────────
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
