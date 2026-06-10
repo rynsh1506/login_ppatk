@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Web Portal PJK | Log in</title>
+    <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+    <link rel="shortcut icon" type="image/x-icon" href="/admin/favicon.ico" />
+
+    <!-- Bootstrap 3.3.7 -->
+    <link rel="stylesheet" href="/admin/assets/AdminLTE-2.4.12/bower_components/bootstrap/dist/css/bootstrap.min.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="/admin/assets/AdminLTE-2.4.12/bower_components/font-awesome/css/font-awesome.min.css">
+    <!-- Ionicons -->
+    <link rel="stylesheet" href="/admin/assets/AdminLTE-2.4.12/bower_components/Ionicons/css/ionicons.min.css">
+    <!-- Theme style -->
+    <link rel="stylesheet" href="/admin/assets/AdminLTE-2.4.12/dist/css/AdminLTE.min.css">
+    <!-- iCheck -->
+    <link rel="stylesheet" href="/admin/assets/AdminLTE-2.4.12/plugins/iCheck/square/blue.css">
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,300italic,400italic,600italic">
+
+    <style>
+        .login-page::before {
+            content: '';
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: -1;
+            background: url(../assets/images/bg.jpg);
+            background-size: cover;
+            position: absolute;
+            top: 0;
+            right: 0;
+        }
+
+        .title {
+            margin-top: 0px;
+            text-shadow: #FFF 0px 0px 5px, #FFF 0px 0px 10px, #FFF 0px 0px 15px, 0px 3px 13px rgba(255,255,255,0);
+        }
+
+        .footer {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            background-color: #ffffff8f;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body class="hold-transition login-page">
+
+    <div class="login-box login-page" style="margin-top:20px; background:transparent">
+        <div class="login-logo">
+            <img src="/admin/assets/images/logo.png" style="width:120px;">
+            <h1 class="title">Web Portal PJK</h1>
+        </div>
+
+        <div class="panel panel-default" style="background-color:#ffffff8f">
+            <div class="panel-body">
+                <style media="screen">
+    .custom-input {
+        border-radius: 3px;
+    }
+</style>
+
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
+<form method="post" action="/admin/user/login" id="login-form">
+    <div class="panel panel-default" style="background-color:#ffffff8f">
+        <div class="panel-body">
+            <!-- Alert message -->
+            <div class="alert alert-warning alert-dismissible" id="alert" style="display:none; padding-bottom:5px; padding-top:5px;">
+                <button type="button" class="close" onclick="$('#alert').fadeOut()" aria-hidden="true">&times;</button>
+                <h5><i class="icon fa fa-info"></i> <span id="alert-content"></span></h5>
+            </div>
+
+            <!-- CSRF token for protection -->
+            <input type="hidden" name="_csrf_backend" value="G_FFaj61Z9HphwwuNq1N4-Xd_JFUjMSrHkeVHRTCkd9KyCwAVvY9m97IRlhw-SrQr6Wu_xXoqtN2PcRZXYyj8g==" />
+
+            <!-- Username input -->
+            <div class="form-group has-feedback">
+                <input type="text" class="form-control custom-input" name="username" placeholder="Username" autocomplete="off" required>
+                <span class="glyphicon glyphicon-user form-control-feedback"></span>
+            </div>
+
+            <!-- Password input -->
+            <div class="form-group has-feedback">
+                <input type="password" class="form-control custom-input" name="password" placeholder="Password" autocomplete="off" required>
+                <span class="glyphicon glyphicon-lock form-control-feedback"></span>
+            </div>
+
+            <!-- Google reCAPTCHA -->
+                            <div class="form-group">
+                    <div class="g-recaptcha" data-sitekey="6LfrDfUsAAAAADkI1H26FkPOrD0DDLS2I2IZ8JPA"></div>
+                </div>
+            
+            <div class="row" style="margin-top:10px"></div>
+        </div>
+
+        <!-- Login Button -->
+        <div class="panel-footer">
+            <button type="submit" class="btn btn-lg btn-primary btn-block" id="btn-login">
+                <i class="fa fa-sign-in" aria-hidden="true"></i> Login
+            </button>
+        </div>
+    </div>
+</form>
+
+<script type="text/javascript">
+    $(document).ready(function() {
+        // Show alert message if there's a message
+        
+        // Function to show alert message
+        function showAlert(text_alert) {
+            $("#alert-content").html(text_alert);
+            $("#alert").fadeIn();
+            setTimeout(function() {
+                $("#alert").fadeOut();
+            }, 3000);  // Hide the alert after 3 seconds
+        }
+
+        // Handle form submission
+        $('#login-form').on('submit', function(e) {
+            var captchaResponse = grecaptcha.getResponse();
+            if (!captchaResponse) {
+                e.preventDefault(); // Prevent form submission
+                showAlert("Please verify that you are not a robot.");
+            }
+        });
+    });
+</script>
+            </div>
+            <div class="panel-footer" style="height:40px"></div>
+        </div>
+
+        <div class="login-logo">
+            <img src="/admin/assets/images/ISO.png" style="width:280px;">
+        </div>
+    </div>
+
+    <div class="footer-copyright text-center py-3 footer">
+        © 2021 Copyright .
+        <a href="https://www.youtube.com/channel/UCjsVmP4oYrvdksCpM1vnxdA/playlists"> PPATK</a>
+        <marquee style="color:red; font-size:20px;">
+            Guna Mengantisipasi Maraknya Serangan Siber Akhir-akhir Ini Maka Untuk Segera Melakukan Penggantian Password
+        </marquee>
+    </div>
+
+    <!-- jQuery -->
+    <script src="/admin/assets/AdminLTE-2.4.12/bower_components/jquery/dist/jquery.min.js"></script>
+    <!-- Bootstrap -->
+    <script src="/admin/assets/AdminLTE-2.4.12/bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+    <!-- iCheck -->
+    <script src="/admin/assets/AdminLTE-2.4.12/plugins/iCheck/icheck.min.js"></script>
+
+    <script>
+        $(function () {
+            $('input').iCheck({
+                checkboxClass: 'icheckbox_square-blue',
+                radioClass: 'iradio_square-blue',
+                increaseArea: '20%'
+            });
+        });
+    </script>
+
+</body>
+</html>

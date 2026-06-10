@@ -23,7 +23,7 @@ const config = {
     targetUrl:     process.env.TARGET_URL     || 'https://pep.ppatk.go.id/admin/user/login',
     loginEmail:    process.env.LOGIN_EMAIL    || '',
     loginPassword: process.env.LOGIN_PASSWORD || '',
-    maxRetries:    3,
+    maxRetries:    1,
     retryDelayMs:  2000,
     timeoutMs:     60000,
     sessionFile:   process.env.SESSION_FILE   || 'session.json',

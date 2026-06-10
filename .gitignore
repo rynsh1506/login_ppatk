@@ -3,5 +3,7 @@ node_modules/
 logs/
 *.log
 .DS_Store
-.venvcache.json
+.venv/
+cache.json
+session.json
 settings.json

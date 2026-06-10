@@ -4,8 +4,8 @@ FROM mcr.microsoft.com/playwright:v1.44.0-jammy
 # Atur working directory di dalam container
 WORKDIR /app
 
-# Install Python 3 dan venv karena image Playwright belum tentu punya Python
-RUN apt-get update && apt-get install -y python3 python3-pip python3-venv && rm -rf /var/lib/apt/lists/*
+# Install Python 3, venv, dan ffmpeg (dibutuhkan oleh Whisper AI untuk bypass Audio Captcha)
+RUN apt-get update && apt-get install -y python3 python3-pip python3-venv ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Copy package.json dan package-lock.json terlebih dahulu untuk optimalisasi cache Docker
 COPY package*.json ./
