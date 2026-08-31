@@ -1,7 +1,7 @@
 'use strict';
 
 const { Router } = require('express');
-const { getToken, updateCache } = require('../controllers/tokenController');
+const { getToken, updateCache, checkStatus, deleteCache } = require('../controllers/tokenController');
 const { executeDirectSearch } = require('../controllers/searchController');
 
 const router = Router();
@@ -12,6 +12,13 @@ const router = Router();
  * @access Public
  */
 router.get('/token', getToken);
+
+/**
+ * @route  GET /api/v1/status
+ * @desc   Cek apakah bot sudah login (cache.json ada)
+ * @access Public
+ */
+router.get('/status', checkStatus);
 
 /**
  * @route  POST /api/v1/search
@@ -26,5 +33,12 @@ router.post('/search', executeDirectSearch);
  * @access Public
  */
 router.post('/update-cache', updateCache);
+
+/**
+ * @route  DELETE /api/v1/cache
+ * @desc   Menghapus cache.json (Logout)
+ * @access Public
+ */
+router.delete('/cache', deleteCache);
 
 module.exports = router;

@@ -108,6 +108,9 @@ const executeDirectSearch = async (req, res) => {
 
     // Parsing HTML menjadi JSON Data Tabel menggunakan Cheerio
     const parsedData = parseSearchHtml(searchHtml);
+    
+    // Extract first item if it's an array to avoid returning an array as requested
+    const finalData = (Array.isArray(parsedData) && parsedData.length > 0) ? parsedData[0] : (Array.isArray(parsedData) ? null : parsedData);
 
     // Kembalikan hasilnya
     return sendSuccess(res, {
@@ -115,7 +118,7 @@ const executeDirectSearch = async (req, res) => {
       cookies_used: cookieCache,
       csrf_used: csrfCache,
       html_response_length: searchHtml ? searchHtml.length : 0,
-      extracted_data: parsedData 
+      extracted_data: finalData 
     });
 
   } catch (err) {

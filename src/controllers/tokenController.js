@@ -68,4 +68,23 @@ const updateCache = async (req, res) => {
   }
 };
 
-module.exports = { getToken, updateCache };
+const checkStatus = (req, res) => {
+  const CACHE_FILE = path.join(__dirname, '../../cache.json');
+  const isLoggedIn = fs.existsSync(CACHE_FILE);
+  return sendSuccess(res, { loggedIn: isLoggedIn });
+};
+
+const deleteCache = (req, res) => {
+  const CACHE_FILE = path.join(__dirname, '../../cache.json');
+  if (fs.existsSync(CACHE_FILE)) {
+    try {
+      fs.unlinkSync(CACHE_FILE);
+      logger.info('[TokenController] cache.json berhasil dihapus secara manual (Logout).');
+    } catch (e) {
+      return sendError(res, `Gagal menghapus cache: ${e.message}`, 500);
+    }
+  }
+  return sendSuccess(res, { message: 'Cache berhasil dikosongkan (Logout sukses).' });
+};
+
+module.exports = { getToken, updateCache, checkStatus, deleteCache };

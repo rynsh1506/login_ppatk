@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPATK Bot Control Panel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --panel-bg: rgba(30, 41, 59, 0.7);
+      --panel-border: rgba(255, 255, 255, 0.1);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --danger: #ef4444;
+      --input-bg: rgba(15, 23, 42, 0.6);
+      --border-radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    .header h1 {
+      font-weight: 700;
+      font-size: 2rem;
+      background: -webkit-linear-gradient(45deg, #3b82f6, #10b981);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--border-radius);
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 16px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+      margin-bottom: 0;
+      min-width: 200px;
+    }
+
+    label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--input-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    }
+
+    /* Checkbox / Toggle Style */
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: var(--input-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+
+    input[type="checkbox"] {
+      display: none;
+    }
+
+    input[type="checkbox"]:checked + .toggle-switch {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    input[type="checkbox"]:checked + .toggle-switch::after {
+      background: white;
+      transform: translateX(20px);
+    }
+
+    button {
+      padding: 12px 24px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 44px;
+    }
+
+    button:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-save {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--panel-border);
+    }
+
+    .btn-save:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Loader */
+    .loader {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Result JSON */
+    .result-container {
+      margin-top: 16px;
+      position: relative;
+    }
+
+    pre {
+      background: #000;
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.85rem;
+      color: #a5b4fc;
+      border: 1px solid var(--panel-border);
+      max-height: 400px;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--panel-border);
+      color: white;
+      font-size: 0.9rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast.success { border-left: 4px solid var(--success); }
+    .toast.error { border-left: 4px solid var(--danger); }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header">
+      <h1>PPATK Bot Control</h1>
+      <p>Panel admin sederhana untuk eksekusi pencarian PEP</p>
+      <div id="loginBadge" style="display: inline-block; margin-top: 12px; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: rgba(255,255,255,0.1); border: 1px solid var(--panel-border);">
+        ⚪ Mengecek status login...
+      </div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div class="glass-panel">
+      <div class="panel-title">
+        ⚙️ Bot Settings
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="strategy">Captcha Strategy</label>
+          <select id="strategy">
+            <option value="whisper-local">Whisper Local AI (Free Audio)</option>
+            <option value="manual">Manual (Isi Sendiri)</option>
+            <option value="stealth">Stealth (Hanya Inject JS)</option>
+            <option value="capsolver">CapSolver (Berbayar)</option>
+            <option value="2captcha">2Captcha (Berbayar)</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex: 0.5;">
+          <label>Mode Headless</label>
+          <label class="toggle-container" style="height: 44px;">
+            <input type="checkbox" id="headless" checked>
+            <div class="toggle-switch"></div>
+            <span style="font-size: 0.9rem;">Aktif</span>
+          </label>
+        </div>
+        <button class="btn-save" id="btnSaveSettings" onclick="saveSettings()">
+          <span class="loader" id="loaderSettings"></span>
+          Save
+        </button>
+        <button class="btn-save" id="btnTestLogin" onclick="testLogin()" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #10b981;">
+          <span class="loader" id="loaderTestLogin"></span>
+          Test Login
+        </button>
+        <button class="btn-save" id="btnClearCache" onclick="clearCache()" style="background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #ef4444;">
+          <span class="loader" id="loaderClearCache"></span>
+          Logout / Clear
+        </button>
+      </div>
+    </div>
+
+    <!-- SEARCH PANEL -->
+    <div class="glass-panel">
+      <div class="panel-title">
+        🔍 Pencarian PEP
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="searchQuery">Nama / NIK</label>
+          <input type="text" id="searchQuery" placeholder="Contoh: BUDI SANTOSO" autocomplete="off" onkeypress="handleEnter(event)">
+        </div>
+        <button id="btnSearch" onclick="performSearch()">
+          <span class="loader" id="loaderSearch"></span>
+          Cari Data
+        </button>
+      </div>
+
+      <!-- Result Area -->
+      <div class="result-container" id="resultContainer" style="display: none;">
+        <label>Hasil JSON:</label>
+        <pre id="jsonResult">{}</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Message here</div>
+
+  <script>
+    // Elements
+    const strategySelect = document.getElementById('strategy');
+    const headlessToggle = document.getElementById('headless');
+    const toggleLabel = headlessToggle.parentElement.querySelector('span');
+    
+    // Toggle label update
+    headlessToggle.addEventListener('change', (e) => {
+      toggleLabel.textContent = e.target.checked ? 'Aktif' : 'Mati (Visual)';
+    });
+
+    // Handle Enter Key on Search Input
+    function handleEnter(e) {
+      if (e.key === 'Enter') {
+        performSearch();
+      }
+    }
+
+    // Load Settings & Status on Boot
+    async function loadSettings() {
+      checkLoginStatus();
+      try {
+        const res = await fetch('/api/v1/settings');
+        const json = await res.json();
+        if (json.success) {
+          strategySelect.value = json.settings.strategy || 'whisper-local';
+          headlessToggle.checked = json.settings.headless;
+          toggleLabel.textContent = json.settings.headless ? 'Aktif' : 'Mati (Visual)';
+        }
+      } catch (err) {
+        showToast('Gagal memuat setting dari server', 'error');
+      }
+    }
+
+    // Check Login Status Badge
+    async function checkLoginStatus() {
+      try {
+        const res = await fetch('/api/v1/status');
+        const json = await res.json();
+        const badge = document.getElementById('loginBadge');
+        if (json.data && json.data.loggedIn) {
+          badge.innerHTML = '🟢 <strong>Status:</strong> Logged In (Ready)';
+          badge.style.background = 'rgba(16, 185, 129, 0.15)';
+          badge.style.color = '#10b981';
+          badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        } else {
+          badge.innerHTML = '🔴 <strong>Status:</strong> Belum Login (Cache Kosong)';
+          badge.style.background = 'rgba(239, 68, 68, 0.15)';
+          badge.style.color = '#ef4444';
+          badge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        }
+      } catch (err) {}
+    }
+
+    // Save Settings
+    async function saveSettings() {
+      const btn = document.getElementById('btnSaveSettings');
+      const loader = document.getElementById('loaderSettings');
+      
+      btn.disabled = true;
+      loader.style.display = 'block';
+
+      try {
+        const payload = {
+          strategy: strategySelect.value,
+          headless: headlessToggle.checked
+        };
+
+        const res = await fetch('/api/v1/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+          showToast('Setting berhasil disimpan!', 'success');
+        } else {
+          showToast(json.error || 'Gagal menyimpan', 'error');
+        }
+      } catch (err) {
+        showToast('Terjadi kesalahan jaringan', 'error');
+      } finally {
+        btn.disabled = false;
+        loader.style.display = 'none';
+      }
+    }
+
+    // Perform Search
+    async function performSearch() {
+      const query = document.getElementById('searchQuery').value.trim();
+      if (!query) {
+        showToast('Masukkan Nama atau NIK terlebih dahulu', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btnSearch');
+      const loader = document.getElementById('loaderSearch');
+      const resultContainer = document.getElementById('resultContainer');
+      const jsonResult = document.getElementById('jsonResult');
+
+      btn.disabled = true;
+      loader.style.display = 'block';
+      jsonResult.textContent = 'Proses scraping sedang berjalan...\nIni bisa memakan waktu 10-20 detik jika bot perlu login ulang ke PPATK...';
+      resultContainer.style.display = 'block';
+
+      try {
+        const res = await fetch('/api/v1/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ searchQuery: query })
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+          // JSON already formatted nicely in backend to not be array
+          jsonResult.textContent = JSON.stringify(json.data.extracted_data, null, 2);
+          showToast('Pencarian sukses!', 'success');
+          checkLoginStatus(); // Update badge status
+        } else {
+          jsonResult.textContent = JSON.stringify(json, null, 2);
+          showToast(json.error || 'Terjadi kesalahan saat mencari', 'error');
+        }
+      } catch (err) {
+        jsonResult.textContent = `Error: ${err.message}`;
+        showToast('Gagal menghubungi server.', 'error');
+      } finally {
+        btn.disabled = false;
+        loader.style.display = 'none';
+      }
+    }
+
+    // Test Login
+    async function testLogin() {
+      const btn = document.getElementById('btnTestLogin');
+      const loader = document.getElementById('loaderTestLogin');
+      const resultContainer = document.getElementById('resultContainer');
+      const jsonResult = document.getElementById('jsonResult');
+
+      btn.disabled = true;
+      loader.style.display = 'block';
+      jsonResult.textContent = 'Mencoba login via Playwright...\n(Tunggu 10-20 detik, bot sedang bekerja di latar belakang)';
+      resultContainer.style.display = 'block';
+
+      try {
+        const res = await fetch('/api/v1/token');
+        const json = await res.json();
+        
+        if (json.success) {
+          jsonResult.textContent = JSON.stringify(json.data || json, null, 2);
+          showToast('Login berhasil! Cache cookie disimpan.', 'success');
+          checkLoginStatus(); // Update badge status
+        } else {
+          jsonResult.textContent = JSON.stringify(json, null, 2);
+          showToast(json.error || 'Gagal login', 'error');
+        }
+      } catch (err) {
+        jsonResult.textContent = `Error: ${err.message}`;
+        showToast('Gagal menghubungi server.', 'error');
+      } finally {
+        btn.disabled = false;
+        loader.style.display = 'none';
+      }
+    }
+
+    // Clear Cache (Logout)
+    async function clearCache() {
+      if(!confirm("Yakin ingin menghapus cache (Logout)? Anda harus login ulang di pencarian berikutnya.")) return;
+
+      const btn = document.getElementById('btnClearCache');
+      const loader = document.getElementById('loaderClearCache');
+      const jsonResult = document.getElementById('jsonResult');
+
+      btn.disabled = true;
+      loader.style.display = 'block';
+
+      try {
+        const res = await fetch('/api/v1/cache', { method: 'DELETE' });
+        const json = await res.json();
+        
+        if (json.success) {
+          jsonResult.textContent = 'Cache berhasil dikosongkan. Bot akan melakukan re-login pada pencarian berikutnya.';
+          showToast('Logout / Clear Cache berhasil!', 'success');
+          checkLoginStatus(); // Update badge
+        } else {
+          showToast(json.error || 'Gagal menghapus cache', 'error');
+        }
+      } catch (err) {
+        showToast('Gagal menghubungi server.', 'error');
+      } finally {
+        btn.disabled = false;
+        loader.style.display = 'none';
+      }
+    }
+
+    // Toast Notification logic
+    let toastTimeout;
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast show ${type}`;
+      
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.className = 'toast';
+      }, 3000);
+    }
+
+    // Init
+    window.addEventListener('DOMContentLoaded', loadSettings);
+  </script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const { requestLogger } = require('./middlewares/requestLogger');
 const { errorHandler } = require('./middlewares/errorHandler');
@@ -13,6 +14,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, '../public')));
 app.use(requestLogger);
 
 // ─── Routes ────────────────────────────────────────────────────────────────────
